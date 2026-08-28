@@ -282,11 +282,11 @@
           { "name": "Choose and add a license", "note": "Done: the project is licensed under MIT and the public README links the license terms.", "state": "done" },
           { "name": "Package agent provisioning", "note": "Add a supported local create-agent and revoke-agent command so users do not need the storage API or test harness.", "state": "current" },
           { "name": "Package Native Messaging", "note": "Commit a Windows host manifest plus install, verify, and uninstall commands for regular Chrome and AdsPower.", "state": "todo" },
-          { "name": "Harden repository hygiene", "note": "Initialize the public repository, remove build residue, add contribution and security reporting files, and verify no credentials or run artifacts are tracked.", "state": "current" },
-          { "name": "Publish public source", "note": "Publish the reviewed v0.2.0 source on GitHub as an explicitly labeled pre-release while install packaging and soak qualification remain open.", "state": "current" }
+          { "name": "Harden repository hygiene", "note": "Done: the Git index excludes local credentials, databases, native binaries, generated test packages, and qualification artifacts.", "state": "done" },
+          { "name": "Publish public source", "note": "Done: the reviewed v0.2.0 source is public at github.com/ohmyskyhigh/octopus-browser-relay as an explicitly labeled pre-release.", "state": "done" }
         ], "src": { "model": "Codex", "transform": "reordered" } },
         { "type": "comparison", "cols": ["Release surface", "Current truth", "Public-release condition"], "rows": [
-          ["Documentation", "README drafted with honest pre-release status", "Links and commands pass from a clean clone"],
+          ["Documentation", "README and architecture are public", "Keep setup limits and release state accurate"],
           ["Legal", "MIT License selected and added", "Keep copyright and license links intact"],
           ["Onboarding", "Core works; provisioning and native setup use development paths", "Supported CLI and installer complete the full flow"],
           ["Evidence", "Automated suite and live A/B/C isolation passed", "Physical recovery soak and install smoke pass"]
@@ -296,8 +296,8 @@
           { "sev": "danger", "title": "Publishing an incomplete install path", "text": "AdsPower depends on the Native Messaging route, so the host manifest and installer must ship with the extension." },
           { "sev": "warning", "title": "Leaking local qualification material", "text": "Clean-clone and secret scans must exclude .relay-data, credentials, database files, tokens, pairing codes, and local run artifacts." }
         ], "src": { "model": "Codex", "transform": "summarized" } },
-        { "type": "conclusion", "title": "The MIT-licensed source can be published as a clearly labeled pre-release while end-user packaging remains open work.", "support": [
-          "README truthfully distinguishes working code from pre-release packaging",
+        { "type": "conclusion", "title": "Octopus Browser Relay is now public under the MIT License as a clearly labeled pre-release.", "support": [
+          "Public repository: github.com/ohmyskyhigh/octopus-browser-relay",
           "Provisioning CLI and Native Messaging installer remain the primary onboarding gaps",
           "A later packaged release still requires clean-machine installation and the revised three-profile soak"
         ], "src": { "model": "Codex", "transform": "summarized" } }
