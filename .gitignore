@@ -1,0 +1,16 @@
+node_modules/
+dist/
+apps/extension/dist/
+.relay-data/
+artifacts/real-world/*
+!artifacts/real-world/.gitignore
+outputs/profile-aware-browser-relay-plan/
+outputs/profile-aware-browser-relay-test/
+work/
+coverage/
+*.log
+*.obj
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+.env

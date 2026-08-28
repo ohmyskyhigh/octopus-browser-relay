@@ -1,0 +1,46 @@
+{
+  "name": "octopus-browser-relay",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.19.0",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "dev": "tsx apps/broker/src/main.ts",
+    "start": "node dist/apps/broker/src/main.js",
+    "build": "pnpm build:extension && tsc -p tsconfig.build.json && tsx scripts/copy-assets.ts && pnpm build:native",
+    "build:extension": "tsx scripts/build-extension.ts",
+    "build:native": "pwsh -NoProfile -File scripts/build-native-host.ps1",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run --exclude tests/e2e/**",
+    "test:e2e": "vitest run tests/e2e",
+    "test:real-world": "tsx tests/real-world/scenario-runner.ts",
+    "verify": "pnpm lint && pnpm typecheck && pnpm test && pnpm test:e2e && pnpm build",
+    "smoke": "tsx scripts/smoke-test.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/client": "2.0.0",
+    "@modelcontextprotocol/node": "2.0.0",
+    "@modelcontextprotocol/server": "2.0.0",
+    "better-sqlite3": "13.0.3",
+    "pino": "10.3.1",
+    "ws": "8.21.3",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@eslint/js": "9.39.3",
+    "@types/better-sqlite3": "7.6.13",
+    "@types/chrome": "0.2.7",
+    "@types/node": "24.10.1",
+    "@types/ws": "8.18.1",
+    "esbuild": "0.28.2",
+    "eslint": "9.39.3",
+    "tsx": "4.23.12",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.68.0",
+    "vitest": "4.1.11"
+  }
+}
