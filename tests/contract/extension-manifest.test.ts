@@ -9,6 +9,8 @@ describe('extension manifest', () => {
     expect(manifest.host_permissions).toEqual(['http://127.0.0.1/*', 'http://localhost/*']);
     expect(manifest.permissions).toContain('nativeMessaging');
     expect(manifest.permissions).toContain('alarms');
+    expect(manifest.permissions).toContain('tabGroups');
+    expect(manifest.permissions).toContain('debugger');
     expect(typeof manifest.key).toBe('string');
     expect(JSON.stringify(manifest)).not.toContain("'unsafe-eval'");
     expect(JSON.stringify(manifest)).not.toContain('https://*/*');

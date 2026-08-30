@@ -44,12 +44,7 @@ else {
           continue;
         }
         if (!existing) {
-          const created = await client.callTool({ name: 'bind_agent', arguments: { principalId: agent.principalId, alias: expectedTarget.alias } });
-          if (created.isError) {
-            findings.push(`Could not bind agent ${agent.role} to ${expectedTarget.alias}: ${JSON.stringify(created.structuredContent ?? created.content)}`);
-          } else {
-            bindings.push({ ...(created.structuredContent as Record<string, unknown>), principalId: agent.principalId });
-          }
+          findings.push(`${agent.role} has no binding to ${expectedTarget.alias}; preflight is read-only and did not create one`);
         }
       }
     }

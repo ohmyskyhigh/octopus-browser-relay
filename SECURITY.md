@@ -14,4 +14,4 @@ Please include the affected component, impact, reproduction steps, and the small
 
 The supported deployment binds both gateways to loopback. LAN or internet exposure is outside the current threat model and requires TLS, explicit host and origin allowlists, stronger secret storage, and a separate security review.
 
-The full design is documented in [docs/security.md](./docs/security.md).
+The preserved implementation security model is in [`doc/90-Proposals/initial-vault-population/operations/security.md`](./doc/90-Proposals/initial-vault-population/operations/security.md). It remains proposal-stage vault material until the higher authority levels are confirmed.

@@ -1,6 +1,6 @@
 {
   "name": "octopus-browser-relay",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@11.19.0",
@@ -9,6 +9,7 @@
   },
   "scripts": {
     "dev": "tsx apps/broker/src/main.ts",
+    "pair": "tsx scripts/create-pairing-code.ts",
     "start": "node dist/apps/broker/src/main.js",
     "build": "pnpm build:extension && tsc -p tsconfig.build.json && tsx scripts/copy-assets.ts && pnpm build:native",
     "build:extension": "tsx scripts/build-extension.ts",
@@ -17,7 +18,8 @@
     "lint": "eslint .",
     "test": "vitest run --exclude tests/e2e/**",
     "test:e2e": "vitest run tests/e2e",
-    "test:real-world": "tsx tests/real-world/scenario-runner.ts",
+    "test:real-world": "vitest run tests/e2e/multi-agent-multi-extension.test.ts",
+    "preflight:real-world": "tsx tests/real-world/setup-readiness.ts",
     "verify": "pnpm lint && pnpm typecheck && pnpm test && pnpm test:e2e && pnpm build",
     "smoke": "tsx scripts/smoke-test.ts"
   },
@@ -25,14 +27,12 @@
     "@modelcontextprotocol/client": "2.0.0",
     "@modelcontextprotocol/node": "2.0.0",
     "@modelcontextprotocol/server": "2.0.0",
-    "better-sqlite3": "13.0.3",
     "pino": "10.3.1",
     "ws": "8.21.3",
     "zod": "4.4.3"
   },
   "devDependencies": {
     "@eslint/js": "9.39.3",
-    "@types/better-sqlite3": "7.6.13",
     "@types/chrome": "0.2.7",
     "@types/node": "24.10.1",
     "@types/ws": "8.18.1",

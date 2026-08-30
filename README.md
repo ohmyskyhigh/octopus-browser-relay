@@ -1,228 +1,218 @@
 # Octopus Browser Relay
 
-Route MCP browser commands to the correct Chrome profile—without exposing Chrome profile IDs, extension IDs, socket IDs, or other private routing identifiers to agents.
+Give AI-agent sessions brokered, profile-aware access to multiple local Chrome or AdsPower browsers through MCP.
 
-Octopus Browser Relay is a local control plane between MCP clients and browser extensions. Each agent authenticates as its own principal, discovers an opaque `bindingRef`, and includes that reference in every profile-specific call. The broker owns identity, connection state, leases, policy, durable command state, and the final mapping to one authenticated extension instance.
+Octopus Browser Relay connects a local MCP gateway to one extension instance in each browser profile. An agent asks for browser capacity, receives broker-issued workspace and tab references, submits extension-supported Chrome DevTools Protocol (CDP) commands, and polls durable request tickets. The extension relays those commands through `chrome.debugger`; Chrome does not need a public remote-debugging port.
 
 > [!IMPORTANT]
-> This repository is an early pre-release (`0.2.0`). The broker, extension, one-agent/one-profile binding contract, automated test suite, and three-profile physical test path are working. A public agent-provisioning command and distributable Native Messaging installer are not yet packaged.
+> Version `0.3.0` is a development release. The canonical fourteen-tool runtime, relay-v2 protocol, Native Messaging path, and extension-backed CDP adapter are implemented in this repository. Automated verification and physical Chrome, AdsPower, Codex, and Hermes qualification are separate gates; see [Current limits](#current-limits) and the [real-world runbook](./doc/06-Files/Real-World-Runbook.md).
 
-## Why this exists
+## What agents can do
 
-Running several browser profiles creates an identity problem: an agent needs to say “use my browser” without knowing a raw profile ID or accidentally reaching another agent's profile.
+- discover connected browser-profile endpoints and broker-issued window choices;
+- request one or more workspaces on distinct profiles;
+- receive an initial managed tab and CDP event cursor for each workspace;
+- create additional managed tabs;
+- send raw CDP commands from the extension-supported capability manifest;
+- poll asynchronous request tickets and read retained CDP events;
+- transfer, pause, resume, terminate, or recover workspace control; and
+- pause or resume every owned workspace on one endpoint.
 
-This project solves that with broker-owned bindings:
-
-- one Chrome or AdsPower profile runs one extension instance;
-- one MCP client authenticates as one agent principal;
-- an administrator pairs the extension and binds the principal to it;
-- the agent receives only an opaque `bindingRef`;
-- every routed call is validated against both the bearer token and `bindingRef`;
-- the broker privately resolves the binding to the current authenticated extension socket.
-
-The architecture keeps relationship cardinality in the broker rather than the extension transport, so other sharing policies can be added later. The current `v2` MCP contract intentionally enforces one active agent-to-extension binding on both sides because it gives the clearest isolation boundary for parallel Codex tasks.
+The broker keeps the relationship among agent sessions, endpoints, windows, workspaces, tabs, tickets, and live extension connections. Agent-facing calls use broker-issued references and endpoint nicknames instead of Chrome profile IDs, extension IDs, window IDs, tab IDs, socket IDs, or debug ports.
 
 ## Architecture
 
 ```mermaid
 flowchart LR
-  subgraph Clients["MCP clients"]
-    A["Agent A + token A"]
-    B["Agent B + token B"]
-    C["Agent C + token C"]
-  end
-
-  MCP["MCP gateway<br/>127.0.0.1:7331"]
-
-  subgraph Broker["Local broker — source of truth"]
-    Auth["Authentication + scopes"]
-    Bind["Binding registry"]
-    State["Target status index"]
-    Policy["Routing + lease policy"]
-    Journal["SQLite command journal"]
-  end
-
-  WS["Extension gateway<br/>127.0.0.1:7332"]
-
-  subgraph Profiles["Separate browser profiles"]
-    EA["Extension A"]
-    EB["Extension B"]
-    EC["Extension C"]
-  end
-
-  A -->|"Bearer A + bindingRef A"| MCP
-  B -->|"Bearer B + bindingRef B"| MCP
-  C -->|"Bearer C + bindingRef C"| MCP
-  MCP --> Auth --> Bind --> State --> Policy --> Journal --> WS
-  WS -->|"authenticated socket A"| EA
-  WS -->|"authenticated socket B"| EB
-  WS -->|"authenticated socket C"| EC
+  C["Codex session"] --> A1["Session-owned stdio adapter"]
+  H["Hermes session"] --> A2["Session-owned stdio adapter"]
+  A1 --> M["HTTP MCP gateway\n14 tools"]
+  A2 --> M
+  M --> B["Local broker\nrouting, status, tickets, controls, logs"]
+  B <--> D["SQLite durable state"]
+  B <--> G["Extension gateway\nrelay protocol v2"]
+  G <--> N["Windows Native Messaging companion"]
+  N <--> E1["Profile A extension"]
+  N <--> E2["Profile B extension"]
+  E1 <--> P1["Chrome or AdsPower profile A\nchrome.debugger"]
+  E2 <--> P2["Chrome or AdsPower profile B\nchrome.debugger"]
 ```
 
-The browser reports facts such as connected, available, busy, offline, or error. Those facts are not routing decisions. The broker combines current status with authorization, binding ownership, lease state, deadlines, retry rules, and command semantics to decide whether to deliver, queue, wait, or reject.
+Normal installed profiles use the Native Messaging companion. The companion forwards extension messages to the broker's loopback relay. Direct extension-to-WebSocket transport remains available only for diagnostics.
 
-For the full interactive system map, open [`outputs/profile-aware-browser-relay/index.html`](./outputs/profile-aware-browser-relay/index.html).
-
-## Core properties
-
-- **Profile-safe routing:** a foreign `bindingRef` fails even when it is structurally valid.
-- **Private internal identity:** MCP responses omit target IDs, socket IDs, profile paths, keys, hashes, and connection epochs.
-- **Broker-owned truth:** SQLite stores targets, bindings, leases, commands, results, and audit events.
-- **Durable dispatch:** commands are committed before delivery and serialized per target.
-- **Explicit ambiguity:** non-idempotent work with an uncertain result becomes `UNKNOWN_OUTCOME`; it is never silently replayed.
-- **Reconnect fencing:** a newer authenticated extension epoch replaces an older socket.
-- **Service-worker tolerance:** reconnect alarms, heartbeats, and durable broker state do not assume a permanently awake Manifest V3 worker.
-- **Loopback-first security:** the MCP and WebSocket listeners reject non-local hosts by default.
-- **Chrome and AdsPower transport:** the extension supports a Native Messaging companion, with direct WebSocket retained for diagnostics.
-
-## Project status
-
-| Area | State |
-| --- | --- |
-| Broker, SQLite migrations, MCP gateway | Implemented |
-| Manifest V3 extension | Implemented |
-| Exclusive agent-to-extension `bindingRef` contract | Implemented |
-| Unit, contract, integration, fault, and N:N E2E tests | Passing |
-| Live three-profile A/B/C routing and isolation | Passed |
-| Long-duration physical recovery soak | Pending release gate |
-| Public agent credential CLI | Not yet packaged |
-| Native companion installer/uninstaller | Not yet committed |
-| Open-source license | MIT |
+Read the canonical [Product definition](./doc/01-Product/Product-Definition.md), [MCP contract](./doc/03-User-Interface/MCP-Contract.md), [System architecture](./doc/04-System/System-Architecture.md), and [Component architecture](./doc/05-Components/Component-Architecture.md) for the complete design.
 
 ## Requirements
 
-- Windows 10 or newer for the current native companion build
-- Node.js `22.12.0` or newer
-- pnpm `11.19.0` or compatible pnpm 11 release
-- Chrome/Chromium `116` or newer
-- Visual Studio C++ Build Tools with the x64 toolchain when building the native companion
+- Windows with PowerShell, current-user Native Messaging registry access, and WinHTTP WebSocket support for the checked-in native host and installer;
+- Node.js `22.12.0` or newer;
+- pnpm `11.19.0` or another compatible pnpm 11 release;
+- Chrome, Chromium, or an AdsPower browser kernel compatible with Manifest V3 and Chrome `116` or newer; and
+- Visual Studio C++ Build Tools with an x64 compiler and Windows SDK when rebuilding the native companion.
 
-The TypeScript broker and direct WebSocket path are platform-neutral, but the current native companion build and registration flow are Windows-specific.
+The TypeScript broker is not intrinsically tied to Windows, but the current native companion uses WinHTTP and the current registration script writes Windows registry keys.
 
-## Development quick start
+## Installation
 
-After cloning the repository:
+### The installer builds, registers, and prepares the local runtime
+
+From the repository root, run:
 
 ```powershell
-cd octopus-browser-relay
+corepack enable
+pwsh -NoProfile -File .\scripts\install-local.ps1 -Install -StartBroker
+```
+
+The installer runs the frozen pnpm install and build unless skip switches are supplied, verifies the compiled stdio MCP adapter, registers `io.github.ohmyskyhigh.octopus_browser_relay` for the current Windows user under Google Chrome, Chromium, and the installed AdsPower/SunBrowser registry roots, migrates an attributable prototype registration, optionally starts the compiled broker, and creates these local handoff files:
+
+```text
+.relay-data/bootstrap/PAIRING.md
+.relay-data/bootstrap/MCP-REGISTRATION.md
+.relay-data/bootstrap/codex-mcp.toml
+.relay-data/bootstrap/hermes-mcp.txt
+```
+
+It does not overwrite Codex or Hermes configuration. It also leaves browser-profile data and existing broker state in place.
+
+### Preflight reports each missing setup action as JSON
+
+With the broker running, execute either readiness entry point:
+
+```powershell
+pwsh -NoProfile -File .\scripts\install-local.ps1
+```
+
+```powershell
+pwsh -NoProfile -File .\scripts\real-world-preflight.ps1
+```
+
+The check verifies the workspace, built extension files, required manifest declarations, native executable, compiled stdio adapter, Native Messaging manifest, every configured Native Messaging registry value, generated pairing and MCP handoff files, and both health endpoints. It exits with code `10` when operator action is still required. Pass the same `-NativeRegistryRoots` values to installation and preflight when a browser build uses different roots.
+
+### The stop command refuses to terminate an unrelated process
+
+An installer-started broker records its process ID in `.relay-data/broker.pid`. Stop it with:
+
+```powershell
+pwsh -NoProfile -File .\scripts\stop-local-broker.ps1
+```
+
+The command inspects the recorded Windows process and stops it only when it is `node.exe` running this workspace's absolute compiled broker entry point. A missing PID file is a successful no-op; a stale PID is retained for inspection; a process mismatch is rejected without stopping anything or deleting the PID file. Use `Ctrl+C` for a foreground `pnpm dev` broker.
+
+### Development mode runs the broker directly from TypeScript
+
+After the one-time Native Messaging registration, use this shorter development loop:
+
+```powershell
 corepack enable
 pnpm install --frozen-lockfile
-pnpm verify
+pnpm build:extension
 pnpm dev
 ```
 
-Default local endpoints and storage:
+`pnpm dev` runs `apps/broker/src/main.ts` through `tsx`. Rebuild and reload `apps/extension/dist` after extension source changes.
+
+## Browser profile pairing
+
+### Every browser profile loads and pairs its own extension instance
+
+Repeat these steps inside each Chrome or AdsPower profile that the broker should control:
+
+1. Open `chrome://extensions`.
+2. Enable **Developer mode**.
+3. Choose **Load unpacked** and select `apps/extension/dist`.
+4. Confirm the extension ID is `caekiojlchhifdomfghejkbfpmaklafe`.
+5. Open **Octopus Browser Relay Settings** and note the profile-local nickname.
+6. In the repository, create a short-lived pairing code for that nickname:
+
+   ```powershell
+   pnpm pair --nickname "<displayed nickname>"
+   ```
+
+   The optional switches are `--expires-minutes <1-1440>` and `--db <path-to-relay.sqlite>`.
+
+7. Keep **Native companion** selected, enter the returned eight-character code, and choose **Save and connect**.
+8. Wait until the extension reports `Status: connected` with the final endpoint nickname.
+
+The code is one-use and defaults to a ten-minute lifetime. Generate a separate code and nickname for every profile; the broker returns the final nickname when pairing completes.
+
+### Direct WebSocket stays available for explicit diagnostics
+
+The extension options page can connect directly to `ws://127.0.0.1:7332/relay`, but that mode is not the normal Chrome or AdsPower setup. Browser kernels can block extension-initiated loopback WebSockets even when ordinary page requests to `127.0.0.1` work. Use **Native companion** for installed profiles and switch to direct WebSocket only while diagnosing transport behavior.
+
+## Agent registration
+
+### The installer generates a Codex stdio MCP configuration fragment
+
+Merge `.relay-data/bootstrap/codex-mcp.toml` into the active Codex `config.toml`, then start a new Codex session. The generated fragment launches Node with `dist/packages/mcp-stdio-adapter/src/main.js` and passes the broker URL, token-file path, and `codex` runtime label as process environment.
+
+The token remains in `.relay-data/admin-token.txt`; the generated fragment points to that file instead of embedding the token. The repository does not choose or modify the active Codex configuration file.
+
+### The installer generates Hermes registration guidance for the installed CLI
+
+Open `.relay-data/bootstrap/MCP-REGISTRATION.md` and run the exact stdio command stored in `.relay-data/bootstrap/hermes-mcp.txt`. It launches the same compiled adapter with `OCTOPUS_RUNTIME=hermes`, the broker URL, and the local token-file path. Then run:
+
+```powershell
+hermes mcp test octopus-browser-relay
+```
+
+Hermes CLI releases can change their configuration syntax. The current repository generates the command and readiness handoff but does not install Hermes or prove a particular external Hermes release.
+
+### One stdio adapter process supplies caller evidence for one agent session
+
+The adapter prefers runtime-owned environment values in this order:
+
+- `CODEX_THREAD_ID`;
+- `CODEX_SESSION_ID`;
+- `HERMES_SESSION_ID`; and
+- `HERMES_AGENT_SESSION_ID`.
+
+`OCTOPUS_RUNTIME_SESSION` can supply an explicit fallback. When none exists, the adapter generates one random session key at startup and retains it for that process. Parent-session variants are forwarded for related subagents.
+
+The adapter forwards these facts to the HTTP broker as `x-octopus-runtime`, `x-octopus-runtime-session`, and optional `x-octopus-parent-runtime-session` headers. They are adapter-supplied evidence, not values for the model to invent or include in tool bodies.
+
+## MCP tools
+
+### Fourteen tools cover discovery, browser work, monitoring, recovery, and control
+
+| Execution | Tool | Purpose |
+| --- | --- | --- |
+| Read | `get_browser_context` | Read one narrow, paginated broker, endpoint, window, capability, workspace, tab, or request-summary view. |
+| Async | `request_browser_workspace` | Request an exact number of workspaces on distinct eligible profile endpoints. |
+| Async | `create_browser_tab` | Create one managed tab in an owned workspace. |
+| Async | `send_cdp_command` | Submit one supported raw CDP command to one managed tab. |
+| Read | `read_cdp_events` | Read retained CDP events from a broker-issued tab cursor. |
+| Read | `get_browser_request` | Read one visible request ticket. |
+| Async | `take_over_workspace` | Transfer one exactly identified workspace. |
+| Async | `terminate_workspace` | Reconcile running work, archive the tab group, and end the workspace. |
+| Async | `resolve_browser_request` | Resolve one owner-visible request paused for confirmation. |
+| Immediate | `close_browser_request` | Remove one terminal ticket from public discovery while retaining audit history. |
+| Async | `stop_workspace_automation` | Pause one workspace manually. |
+| Async | `resume_workspace_automation` | Reconcile and clear the workspace's manual-stop cause. |
+| Async | `kill_browser_endpoint` | Pause every active workspace on one entirely owned endpoint. |
+| Async | `resume_browser_endpoint` | Reconcile the endpoint and clear its endpoint-kill cause. |
+
+Every asynchronous tool returns an accepted `request_ref` before its browser effect becomes eligible for dispatch. The agent polls that reference with `get_browser_request`. The exact request and result schemas live in [MCP-Contract.schema.json](./doc/03-User-Interface/MCP-Contract.schema.json).
+
+The current extension capability baseline is [extension-baseline.json](./packages/protocol/capabilities/extension-baseline.json). It includes selected Accessibility, DOM, Emulation, Input, Network, Page, and Runtime methods, all confined to a managed tab.
+
+## Local endpoints and state
 
 | Purpose | Default |
 | --- | --- |
-| MCP | `http://127.0.0.1:7331/mcp` |
-| Health | `http://127.0.0.1:7331/health` |
-| Extension relay | `ws://127.0.0.1:7332/relay` |
-| SQLite database | `.relay-data/relay.sqlite` |
-| Generated admin token | `.relay-data/admin-token.txt` |
+| MCP and MCP health | `http://127.0.0.1:7331/mcp` and `http://127.0.0.1:7331/health` |
+| Extension relay and relay health | `ws://127.0.0.1:7332/relay` and `http://127.0.0.1:7332/health` |
+| SQLite state | `.relay-data/relay.sqlite` |
+| Generated bearer token | `.relay-data/admin-token.txt` |
+| Installer-managed broker PID | `.relay-data/broker.pid` |
+| Generated setup handoff | `.relay-data/bootstrap/` |
 
-The admin token is generated on first start when `RELAY_ADMIN_TOKEN` is unset. `.relay-data/` is ignored by Git; do not commit or paste its contents.
+The broker creates the token on first start when `RELAY_ADMIN_TOKEN` is unset. `.relay-data/` is ignored by Git.
 
-To build without starting the development server:
-
-```powershell
-pnpm build
-pnpm start
-```
-
-### Load the extension
-
-1. Build the project with `pnpm build:extension` or `pnpm verify`.
-2. Open `chrome://extensions` in each browser profile.
-3. Enable **Developer mode**.
-4. Choose **Load unpacked** and select `apps/extension/dist`.
-5. Open **Browser Relay Settings** from that profile's extension instance.
-
-For a first diagnostic connection in regular Chrome, select **Direct WebSocket** and use `ws://127.0.0.1:7332/relay`. Chrome may ask for Local Network Access; allow access to loopback.
-
-AdsPower should use **Native companion (recommended)** because some AdsPower kernels block extension-initiated loopback WebSockets even when their website allowlist is enabled. The native executable builds to `dist/apps/native-host/relay-native-host.exe`; a public install/uninstall script and Native Messaging host manifest are still release prerequisites.
-
-## Pair and bind a profile
-
-Provisioning has two different authorities:
-
-- the **administrator** pairs, names, binds, renames, and revokes targets;
-- the **agent** can discover and use only its own active binding.
-
-The intended flow is:
-
-1. Provision a unique bearer credential for the MCP agent.
-2. Using the admin credential, call `pair_target` with a safe alias such as `profile-a`.
-3. Enter the returned one-time eight-character code in that profile's extension options.
-4. Call `bind_agent` with the agent's `principalId` and the target alias.
-5. The agent calls `get_my_binding` and retains the returned opaque `bindingRef`.
-6. The agent attaches that `bindingRef` to every target-specific MCP call.
-
-```json
-{
-  "bindingRef": "br_example_opaque_reference",
-  "operation": "list_tabs",
-  "parameters": {},
-  "idempotencyClass": "read",
-  "deadlineMs": 30000
-}
-```
-
-`bindingRef` is a routing reference, not a secret. The bearer token authenticates the agent; the broker requires the binding row to match that authenticated principal before it resolves the private target.
-
-The repository currently provisions non-admin principals through its storage API and real-world test harness. A supported `create-agent` CLI is required before public users can complete this flow without development code.
-
-## Connect an MCP client
-
-Configure one MCP connection per agent:
-
-- URL: `http://127.0.0.1:7331/mcp`
-- transport: Streamable HTTP
-- header: `Authorization: Bearer <agent-token>`
-
-Do not share one bearer token among independent agents. Separate credentials are what let the broker prove that `bindingRef A` belongs to Agent A and reject Agent B's attempt to use it.
-
-### MCP tools
-
-| Group | Tools |
-| --- | --- |
-| Agent discovery | `list_targets`, `get_my_binding`, `get_target` |
-| Sessions | `acquire_session`, `release_session` |
-| Browser work | `dispatch`, `get_command` |
-| Administration | `pair_target`, `bind_agent`, `unbind_agent`, `list_bindings`, `rename_target`, `revoke_target`, `broker_health` |
-
-`get_target`, `acquire_session`, `release_session`, `dispatch`, and `get_command` require an owned `bindingRef`. Mutating browser operations also require a valid session lease.
-
-Supported browser operations are:
-
-- `list_tabs`
-- `get_active_tab`
-- `open_url`
-- `activate_tab`
-- `navigate`
-- `snapshot`
-
-See [the MCP binding contract](./docs/mcp-contract-v2.md) and [the extension relay protocol](./docs/protocol-v1.md) for the wire-level rules.
-
-## Configuration
-
-Copy [`.env.example`](./.env.example) into your preferred local environment loader or set variables before starting the broker.
-
-| Variable | Default | Purpose |
-| --- | --- | --- |
-| `RELAY_HOST` | `127.0.0.1` | Listener address |
-| `RELAY_MCP_PORT` | `7331` | MCP and health HTTP port |
-| `RELAY_WS_PORT` | `7332` | Extension WebSocket port |
-| `RELAY_DB_PATH` | `.relay-data/relay.sqlite` | Durable broker database |
-| `RELAY_LOG_LEVEL` | `info` | Pino log level |
-| `RELAY_HEARTBEAT_TIMEOUT_MS` | `45000` | Extension liveness timeout |
-| `RELAY_ERROR_THRESHOLD` | `3` | Consecutive error threshold |
-| `RELAY_LEASE_TTL_MS` | `60000` | Default exclusive lease lifetime |
-| `RELAY_ADMIN_TOKEN` | generated locally | Administrative bearer token |
-
-Changing `RELAY_HOST` away from loopback is outside the current threat model. Do not expose either listener to a LAN or the internet without TLS, explicit host/origin allowlists, stronger secret storage, and a separate security review.
+Supported environment variables are `RELAY_HOST`, `RELAY_MCP_PORT`, `RELAY_WS_PORT`, `RELAY_DB_PATH`, `RELAY_LOG_LEVEL`, `RELAY_HEARTBEAT_TIMEOUT_MS`, `RELAY_ERROR_THRESHOLD`, `RELAY_LEASE_TTL_MS`, and `RELAY_ADMIN_TOKEN`. Their validated defaults are defined in `apps/broker/src/config.ts`.
 
 ## Verification
+
+### Automated checks exercise contracts, storage, gateways, broker policy, and packaging
 
 ```powershell
 pnpm lint
@@ -232,55 +222,43 @@ pnpm test:e2e
 pnpm build
 ```
 
-Or run the complete gate:
+`pnpm verify` runs those checks as one gate. `pnpm build` also compiles the Windows native companion and therefore needs the C++ toolchain. Use the [real-world runbook](./doc/06-Files/Real-World-Runbook.md) for physical profiles and agent runtimes.
 
-```powershell
-pnpm verify
-pnpm smoke
-```
+## Current limits
 
-`pnpm verify` covers schema contracts, authorization, SQLite migrations, status derivation, routing policy, binding isolation, lease handling, reconnect fencing, serialization, crash recovery, MCP transport, WebSocket behavior, extension packaging, native compilation, and a multi-agent/multi-extension E2E scenario.
-
-The physical qualification uses three separate browser profiles and three independently authenticated Codex tasks. See [the real-world test runbook](./docs/real-world-test-runbook.md).
+- The Native Messaging host and registration installer are Windows-specific.
+- The installer registers current-user host manifests for Google Chrome, Chromium, and the installed AdsPower/SunBrowser root. Another browser build or AdsPower variant that reads a different registry location needs its actual root passed through `-NativeRegistryRoots`.
+- The installer generates Codex and Hermes stdio handoff files but does not modify either runtime's configuration or install either runtime.
+- Independent sessions remain distinct when the host launches one adapter process per session or supplies a supported runtime session environment value. A host that deliberately reuses one adapter process across unidentified sessions also reuses that adapter identity.
+- The HTTP broker confirms an accepted ticket after handing it to the stdio adapter. MCP has no transaction spanning that HTTP handoff and the adapter's later stdout write, so an adapter crash in that narrow interval can dispatch work whose ticket the agent runtime did not receive.
+- The extension executes only methods published by `octopus-extension-baseline-v1`; flattened child CDP sessions are disabled.
+- Relay-v2 extension envelopes are limited to 1 MiB. Capability and inventory limits are published in the same manifest.
+- The relay-v1 compatibility bridge remains enabled for migration, while the public MCP gateway exposes only the canonical fourteen tools.
+- The repository does not install Codex, Hermes, Chrome, or AdsPower, and it has not yet recorded the final cross-runtime, multi-profile physical qualification for this release.
+- There is a PID-verified broker stop command but no full uninstall command yet.
 
 ## Repository layout
 
 ```text
-apps/
-  broker/             Local broker process
-  extension/          Manifest V3 Chrome extension
-  native-host/        Windows Native Messaging companion
-packages/
-  broker-core/        Status, policy, leases, and durable dispatch
-  extension-gateway/  Authenticated WebSocket gateway
-  mcp-gateway/        MCP authentication and tool surface
-  protocol/           Schemas and versioned message contracts
-  storage/            SQLite repositories and migrations
-docs/                 Protocol, security, and test documentation
-scripts/              Build, smoke, and real-world test automation
-tests/                Unit, contract, integration, fault, E2E, and physical tests
+doc/                    Top-down knowledge vault and change governance
+apps/broker/            Broker process composition and configuration
+apps/extension/         Manifest V3 extension source and built unpacked output
+apps/native-host/       Windows Native Messaging companion source
+packages/broker-core/   Workspace, ticket, routing, recovery, and control policy
+packages/extension-gateway/  Relay-v1/v2 connection and message gateway
+packages/mcp-gateway/   Authenticated fourteen-tool Streamable HTTP MCP server
+packages/mcp-stdio-adapter/  Session-owned stdio bridge for Codex and Hermes
+packages/protocol/      MCP schemas, relay schemas, domain facts, and capabilities
+packages/storage/       SQLite repositories and migrations
+scripts/                Build, install, pairing, preflight, and test automation
+tests/                  Contract, unit, integration, fault, E2E, and physical tests
 ```
 
-## Security model
-
-- Agent tokens, pairing codes, and session handles are stored as hashes.
-- Pairing codes are short-lived and one-use.
-- Each extension creates an ECDSA P-256 identity and signs reconnect challenges.
-- Target IDs and live connection identifiers remain inside the broker.
-- MCP outputs use explicit allowlists rather than serializing storage rows.
-- Authorization headers and credential material are redacted from logs.
-- Only allowlisted browser operations and validated parameters are accepted.
-
-Read [the security model](./docs/security.md) and [security reporting policy](./SECURITY.md) before changing listener scope, identity, pairing, routing, or replay behavior. Please do not include tokens, pairing codes, local profile paths, or private target identifiers in public bug reports.
+Start with the [top-down vault map](./doc/TOP-DOWN-MOC.md) for project knowledge and the [repository map](./doc/06-Files/Repository-Map.md) for exact implementation paths.
 
 ## Contributing
 
-Contributions are welcome. Read [CONTRIBUTING.md](./CONTRIBUTING.md), use `pnpm verify` as the required local gate, and keep changes within the existing trust boundaries:
-
-- MCP identifies the agent and carries opaque routing references.
-- The broker is the only source of truth and the only component that chooses a target socket.
-- The extension reports facts and executes validated commands; it does not make broker routing decisions.
-- Raw browser-profile identity never crosses the public MCP boundary.
+Read [CONTRIBUTING.md](./CONTRIBUTING.md), the vault [editing rules](./doc/AGENTS.md), and [SECURITY.md](./SECURITY.md) before changing contracts, routing, transport, listener scope, or identity behavior. Do not include bearer tokens, pairing codes, private browser identifiers, profile paths, or SQLite files in public reports.
 
 ## License
 

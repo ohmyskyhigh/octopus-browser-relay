@@ -2,7 +2,8 @@ import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 
-const executable = resolve(process.argv[2] ?? 'work/native-host/relay-native-host.exe');
+const executable = resolve(process.argv[2] ?? 'dist/apps/native-host/relay-native-host.exe');
+const relayUrl = process.argv[3] ?? 'ws://127.0.0.1:7332/relay';
 const child = spawn(executable, [], { stdio: ['pipe', 'pipe', 'inherit'] });
 const messages: unknown[] = [];
 let pending = Buffer.alloc(0);
@@ -29,7 +30,7 @@ child.stdout.on('data', (chunk: Buffer) => {
   }
 });
 
-child.stdin.write(frame({ nativeControl: { type: 'CONNECT', url: 'ws://127.0.0.1:7332/relay' } }));
+child.stdin.write(frame({ nativeControl: { type: 'CONNECT', url: relayUrl } }));
 
 const deadline = Date.now() + 8_000;
 while (Date.now() < deadline) {
@@ -45,7 +46,7 @@ if (!messages.some((message) =>
 }
 
 child.stdin.write(frame({
-  protocolVersion: 1,
+  protocolVersion: 2,
   messageId: randomUUID(),
   sentAt: new Date().toISOString(),
   type: 'HELLO',

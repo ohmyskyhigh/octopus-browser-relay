@@ -1,0 +1,314 @@
+# Real-world Chrome, AdsPower, Codex, and Hermes runbook
+
+Status: executable operator runbook for the `0.3.0` development runtime.
+
+This runbook proves physical behavior separately from simulated tests. A failed checkpoint is evidence of a runtime or setup gap; it must not be rewritten as a pass because a lower-level unit or integration test succeeded.
+
+Parent: [`Files MOC`](./_MOC.md).
+
+## Scope
+
+### The qualification uses real agent sessions and separately installed browser profiles
+
+The complete run uses:
+
+- one local Octopus broker;
+- one Codex session and one Hermes session;
+- at least three browser profiles, with one Octopus extension instance in each;
+- Native Messaging for every normal profile connection;
+- the checked-in local fixture server; and
+- broker-issued endpoint nicknames, window references, workspace references, tab references, request references, and event cursors.
+
+Chrome and AdsPower can be mixed. Each profile must retain separate extension storage, and every extension must pair with a distinct nickname.
+
+### Direct WebSocket results count only as transport diagnostics
+
+Selecting **Direct WebSocket (diagnostics only)** can isolate Native Messaging failures, but it does not pass the installed-profile transport checkpoint. The normal qualification keeps **Native companion** selected in Chrome and AdsPower.
+
+## Prerequisites
+
+### The local machine supplies the Windows native build and two agent runtimes
+
+Confirm these commands or applications are available before starting:
+
+```powershell
+node --version
+pnpm --version
+pwsh --version
+```
+
+Node must satisfy the root `package.json` engine (`>=22.12.0`). Building the native host requires Visual Studio C++ Build Tools, an x64 compiler, and a Windows SDK. Codex, Hermes, Chrome, and AdsPower are external prerequisites; the repository does not install them.
+
+### Existing browser profiles and pairing state remain user data
+
+The setup and test commands do not delete browser profiles. Do not reset extension pairing merely to repeat a run. Use **Reset pairing** only when intentionally replacing that endpoint identity, then generate a new code.
+
+## Installation
+
+### One installer command builds artifacts, registers Native Messaging, and starts the broker
+
+From the repository root:
+
+```powershell
+corepack enable
+pwsh -NoProfile -File .\scripts\install-local.ps1 -Install -StartBroker
+```
+
+The command writes local generated state below `.relay-data/`. Keep the final JSON output; it names the actual extension path, native host path, registration manifest, configured registry roots, MCP instructions, pairing instructions, broker PID file, and health conditions used by this run. The default Windows registration roots are Google Chrome, Chromium, and `HKCU:\Software\AdsPower\SunBrowser\NativeMessagingHosts`, which is the installed AdsPower/SunBrowser root on the qualification device. Pass the actual roots through `-NativeRegistryRoots` when testing another browser build.
+
+### The preflight must report READY before browser work begins
+
+Run:
+
+```powershell
+pwsh -NoProfile -File .\scripts\real-world-preflight.ps1
+```
+
+Expected top-level result:
+
+```json
+{
+  "status": "READY"
+}
+```
+
+If it reports `ACTION_REQUIRED`, perform the first returned `nextAction` and rerun it. Exit code `10` means setup is incomplete, not that the script crashed. Readiness checks the compiled stdio adapter, all generated Codex and Hermes handoff files, and every configured Windows Native Messaging registry value in addition to the build, manifest, pairing, and health checks. Use the same `-NativeRegistryRoots` values for installation and preflight.
+
+### The installer-started broker stops only after its PID and command line match
+
+The installer launches a hidden compiled broker and records its process ID in `.relay-data/broker.pid`. Stop that process with:
+
+```powershell
+pwsh -NoProfile -File .\scripts\stop-local-broker.ps1
+```
+
+The stop command requires the recorded process to be `node.exe` running this workspace's absolute compiled broker entry point. It refuses an unrelated PID, retains stale or mismatched PID files for inspection, and deletes the PID file only after the matching process has stopped. A foreground `pnpm dev` broker still stops with `Ctrl+C`.
+
+### Development runs can replace the compiled broker after one-time registration
+
+Stop the installer-started broker with `scripts\stop-local-broker.ps1` before opening a second process on the same ports. Then run:
+
+```powershell
+pnpm build:extension
+pnpm dev
+```
+
+Keep that terminal open. Reload the unpacked extension in every profile after rebuilding it.
+
+## Browser pairing
+
+### Each Chrome or AdsPower profile loads the same build into separate extension storage
+
+In every intended profile:
+
+1. Open `chrome://extensions`.
+2. Enable **Developer mode**.
+3. Choose **Load unpacked** and select the absolute `extensionPath` printed by the installer.
+4. Confirm extension ID `caekiojlchhifdomfghejkbfpmaklafe`.
+5. Accept the extension's `debugger`, `tabGroups`, and Native Messaging permissions.
+6. Open **Octopus Browser Relay Settings** and copy the proposed nickname for use in the next local command.
+
+### One local command issues a short-lived code for the displayed nickname
+
+For each profile, run:
+
+```powershell
+pnpm pair --nickname "<displayed nickname>"
+```
+
+If the broker uses a non-default database, add `--db "<path>"`. The command returns `endpoint_nickname`, `pairing_code`, `expires_at`, and `database_path`. Do not put the code in chat or test notes.
+
+In that profile's extension options:
+
+1. keep **Native companion** selected;
+2. keep the relay URL aligned with the broker, normally `ws://127.0.0.1:7332/relay`;
+3. enter the code;
+4. choose **Save and connect**; and
+5. wait for `Status: connected`.
+
+Generate a new code for every profile. Codes are one-use and default to ten minutes.
+
+### Health confirms how many paired endpoints are currently connected
+
+Read both health endpoints:
+
+```powershell
+Invoke-RestMethod http://127.0.0.1:7331/health | ConvertTo-Json -Depth 8
+Invoke-RestMethod http://127.0.0.1:7332/health | ConvertTo-Json -Depth 8
+```
+
+Record the observed `connectedEndpoints` count from MCP health. It must equal the number of profile extensions that currently show `Status: connected`. An endpoint count alone does not prove CDP execution; the later checkpoints do.
+
+## Local fixture
+
+### The fixture server gives each profile an unambiguous page marker
+
+Start the checked-in fixture in another terminal and leave it running:
+
+```powershell
+pnpm exec tsx tests/real-world/fixture-server.ts --port=7340
+```
+
+These pages are available only on loopback:
+
+| Role | URL | Expected marker |
+| --- | --- | --- |
+| A | `http://127.0.0.1:7340/fixture/A` | `fixture-A` |
+| B | `http://127.0.0.1:7340/fixture/B` | `fixture-B` |
+| C | `http://127.0.0.1:7340/fixture/C` | `fixture-C` |
+
+Check `http://127.0.0.1:7340/health` before assigning browser work.
+
+## Agent registration
+
+### Codex launches a session-owned stdio adapter from the generated fragment
+
+Open `.relay-data/bootstrap/MCP-REGISTRATION.md`. Merge `.relay-data/bootstrap/codex-mcp.toml` into the active Codex configuration and start a new Codex session. Confirm the session can list an MCP server named `octopus-browser-relay` and exactly fourteen tools.
+
+The generated fragment launches the compiled Node stdio adapter and supplies the loopback broker URL, `.relay-data/admin-token.txt` path, and `codex` runtime label. It does not embed the token. The repository generates the fragment but does not locate or overwrite the active Codex configuration.
+
+### Hermes follows the generated command for the installed CLI release
+
+Open `.relay-data/bootstrap/hermes-mcp.txt` and run its exact command. The command launches the same stdio adapter with the loopback broker URL, local token-file path, and `hermes` runtime label. Then run:
+
+```powershell
+hermes mcp test octopus-browser-relay
+```
+
+The repository does not install Hermes or validate every Hermes CLI release. If the installed CLI rejects the generated syntax, capture `hermes mcp add --help` and treat registration as blocked rather than changing the broker contract.
+
+### Separate stdio adapter processes distinguish independent sessions without model-authored IDs
+
+The adapter prefers `CODEX_THREAD_ID`, `CODEX_SESSION_ID`, `HERMES_SESSION_ID`, or `HERMES_AGENT_SESSION_ID`. If none exists, it creates a random identity once for that process. A related subagent can supply the matching parent-session environment value.
+
+Confirm the agent runtime launches one stdio adapter process per independent session. A host that reuses one process across several unidentified sessions also reuses its caller identity and cannot pass the independent-session checkpoint.
+
+### The two-transport acknowledgement boundary remains visible during failure testing
+
+The broker hands an accepted ticket to the stdio adapter before dispatch eligibility. The adapter then writes that result to the agent over stdio. MCP supplies no atomic transaction across those two handoffs. If the adapter is killed in that narrow interval, browser work can become eligible even though the agent did not receive its `request_ref`; record that outcome as the known adapter-boundary limitation rather than a normal pass.
+
+## Single-session browser cycle
+
+### The agent discovers choices before requesting browser capacity
+
+Give the agent this task in natural language:
+
+> Use Octopus Browser Relay. First read the connected endpoint choices and their eligible windows. Do not invent any reference. Request one workspace on endpoint `<nickname>` using the most recently focused eligible window, and poll the returned request ticket until it reaches a terminal or paused condition. Report the broker-issued `workspace_ref`, initial `tab_ref`, and initial event cursor.
+
+Passing evidence contains:
+
+- an endpoint nickname that matches the intended extension;
+- a broker-issued window choice or use of the documented most-recently-focused default;
+- an accepted `request_ref` returned before completion;
+- a succeeded workspace ticket; and
+- one initial managed tab and cursor returned by that ticket.
+
+### The agent navigates and reads one marker through ticketed CDP
+
+Continue the task:
+
+> On that initial tab, send `Page.navigate` to `<fixture URL>`. Poll its `request_ref` until complete. Then send `Runtime.evaluate` with `returnByValue: true` to read `document.querySelector('[data-relay-marker]')?.getAttribute('data-relay-marker')`. Poll that second ticket and report the returned marker.
+
+The returned marker must match the profile's assigned fixture. A result from the wrong letter is a routing failure.
+
+### Every accepted browser command is verified through its broker-issued ticket
+
+For each asynchronous call, capture the acceptance result and the final `get_browser_request` result. Do not infer completion from the visible page alone. If the ticket pauses, follow its returned actions instead of replaying the CDP command without resolution.
+
+## Codex and Hermes equivalence
+
+### Both runtimes perform the same contract without runtime-specific tool bodies
+
+Run the single-session cycle once from Codex and once from Hermes, using separate fixtures or separate workspaces. Both sessions must see the same fourteen tool names, use the same MCP input structure, receive broker-issued IDs, poll tickets, and obtain the assigned marker.
+
+Record any difference in schema loading, structured results, authorization headers, session evidence, or polling behavior. Adapter differences are failures to investigate; they do not authorize a different browser contract for one runtime.
+
+## Multi-profile and concurrent execution
+
+### One session can request several distinct profiles in one capacity call
+
+Ask one agent to request three workspaces and designate three connected endpoint nicknames. The accepted request must either return all three workspaces or fail as one capacity request; it must not quietly return fewer than requested.
+
+Navigate the three initial tabs to fixtures A, B, and C, poll all tickets, and evaluate each marker. Every workspace must remain associated with its selected endpoint.
+
+### Independent sessions on one endpoint receive different workspace tab groups
+
+Only run this checkpoint when the MCP adapters supply distinct session evidence. Ask Codex and Hermes to request separate workspaces on the same endpoint. Confirm that each receives a different `workspace_ref`, initial `tab_ref`, and Chrome tab group. Send different fixture navigations concurrently and verify both markers.
+
+Related parent/subagent work can intentionally continue the same lineage workspace when the parent-session evidence is supplied. Do not use this variation as evidence that unrelated sessions are isolated.
+
+### Same-tab commands complete in ticket-acceptance order
+
+From one owning session, submit several short commands to the same `tab_ref` without waiting between submissions. Record the returned tickets in acceptance order and poll them. Later commands must not complete their browser cycles ahead of earlier accepted commands on that tab.
+
+## Recovery and controls
+
+### Closing one profile pauses its work without disconnecting other endpoints
+
+With workspaces active on A, B, and C:
+
+1. close profile B completely;
+2. confirm MCP health decreases its connected endpoint count;
+3. submit or observe B's next browser request and record its paused condition;
+4. confirm A and C still complete commands;
+5. reopen B and wait for its extension to report `Status: connected`; and
+6. poll B's request until reconciliation and the documented retry/resolution path finishes.
+
+The broker process must remain running throughout this checkpoint.
+
+### Manual stop blocks new workspace work until a separate resume request completes
+
+Call `stop_workspace_automation` for one owned `workspace_ref`, poll the stop ticket, then attempt another command. Confirm the workspace remains paused. Call `resume_workspace_automation`, poll its ticket, and verify a new CDP command can complete after reconciliation.
+
+### Endpoint kill and resume apply to every active workspace on that endpoint
+
+Call `kill_browser_endpoint` with one entirely owned endpoint nickname and poll its ticket. Confirm every workspace on that endpoint is paused while other endpoints continue. Call `resume_browser_endpoint`; after reconciliation, poll resumed work from its existing checkpoints.
+
+### Termination archives the tab group and waits for running work
+
+Call `terminate_workspace` while the target workspace is idle or after recording any running ticket. Poll termination to completion. Confirm the tab group remains visible with its archive suffix, the workspace no longer accepts new work, and the human can close the archived group after inspection.
+
+## Acceptance evidence
+
+### A release candidate passes only when every applicable checkpoint has direct evidence
+
+Record this table for the run:
+
+| Checkpoint | Required evidence |
+| --- | --- |
+| Setup | Installer output and preflight `READY` |
+| Pairing | Distinct nicknames and `Status: connected` in every profile |
+| MCP surface | Exactly fourteen canonical tools in Codex and Hermes |
+| Ticket ordering | Accepted `request_ref` observed before terminal result |
+| Routing | A/B/C workspaces return A/B/C fixture markers |
+| Concurrency | Independent workspaces and same-tab acceptance order behave as specified |
+| Recovery | Closing and reopening one profile pauses and resumes only its affected work |
+| Controls | Stop/resume, endpoint kill/resume, and termination produce polled terminal evidence |
+| Transport | Normal runs report Native Messaging, not direct WebSocket |
+
+State which browser product and version, extension version, broker service version, MCP contract version, and relay protocol version were observed. Do not include tokens, pairing codes, raw private browser identifiers, profile paths, or the SQLite database in the evidence.
+
+## Known qualification limits
+
+### The current runbook exposes unsupported setup rather than hiding it
+
+- The native host and installer are Windows-specific.
+- The defaults include the installed AdsPower/SunBrowser Native Messaging root; another AdsPower or Chromium variant can require its actual registry root through the installer's and preflight's `-NativeRegistryRoots` parameter.
+- The installer generates but does not apply Codex or Hermes configuration.
+- Independent-session proof requires one stdio adapter process per session or a supported runtime session environment value; a deliberately shared unidentified adapter process cannot pass it.
+- An adapter crash between the broker's HTTP handoff and the adapter's stdout write can leave dispatched work whose ticket was not received by the agent runtime.
+- The relay-v1 compatibility path and older real-world harness files are migration evidence; they do not substitute for the canonical fourteen-tool checkpoints above.
+- Direct WebSocket proves only its diagnostic transport path.
+- The extension capability manifest excludes unsupported CDP methods and flattened child sessions.
+
+## Cleanup
+
+### Stopping test processes preserves browser and broker state for inspection
+
+Stop the fixture server and a foreground broker with `Ctrl+C` after recording results. Stop an installer-started hidden broker with `pwsh -NoProfile -File .\scripts\stop-local-broker.ps1`. Do not delete `.relay-data` or reset pairing as routine cleanup. Archived tab groups remain for the human to inspect and close.
+
+Generated evidence under `artifacts/real-world/` can be preserved. The existing cleanup script intentionally prints the evidence location and does not delete Chrome profiles:
+
+```powershell
+pwsh -NoProfile -File .\scripts\real-world-cleanup.ps1 -RunId "<run-id>"
+```

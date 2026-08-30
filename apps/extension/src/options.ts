@@ -1,10 +1,11 @@
 import { loadSettings, saveSettings } from './config.js';
-import { resetIdentity } from './identity/device-identity.js';
+import { loadOrCreateIdentity, resetIdentity } from './identity/device-identity.js';
 
 const form = document.querySelector<HTMLFormElement>('#settings-form')!;
 const brokerUrl = document.querySelector<HTMLInputElement>('#broker-url')!;
 const transportMode = document.querySelector<HTMLSelectElement>('#transport-mode')!;
 const pairingCode = document.querySelector<HTMLInputElement>('#pairing-code')!;
+const profileNickname = document.querySelector<HTMLElement>('#profile-nickname')!;
 const status = document.querySelector<HTMLElement>('#status')!;
 const reset = document.querySelector<HTMLButtonElement>('#reset')!;
 
@@ -14,12 +15,20 @@ function statusText(value: unknown, alias: unknown, transport: unknown, lastErro
 }
 
 async function refresh(): Promise<void> {
-  const settings = await loadSettings();
-  const stored = await chrome.storage.local.get(['connectionStatus', 'targetAlias', 'transportKind', 'lastError']);
+  const [settings, identity] = await Promise.all([loadSettings(), loadOrCreateIdentity()]);
+  const stored = await chrome.storage.local.get([
+    'connectionStatus',
+    'endpointNickname',
+    'targetAlias',
+    'transportKind',
+    'lastError'
+  ]);
   brokerUrl.value = settings.brokerUrl;
   transportMode.value = settings.transportMode;
   pairingCode.value = settings.pairingCode ?? '';
-  status.textContent = statusText(stored.connectionStatus, stored.targetAlias, stored.transportKind, stored.lastError);
+  const nickname = stored.endpointNickname ?? stored.targetAlias ?? identity.nickname ?? identity.proposedNickname;
+  profileNickname.textContent = String(nickname);
+  status.textContent = statusText(stored.connectionStatus, nickname, stored.transportKind, stored.lastError);
 }
 
 form.addEventListener('submit', (event) => {
@@ -51,13 +60,13 @@ form.addEventListener('submit', (event) => {
 reset.addEventListener('click', () => {
   void (async () => {
     await resetIdentity();
-    await chrome.runtime.sendMessage({ type: 'relay:reconnect' });
+    await chrome.runtime.sendMessage({ type: 'relay:reset' });
     await refresh();
   })();
 });
 
 chrome.storage.onChanged.addListener((changes, areaName) => {
-  if (areaName === 'local' && ['connectionStatus', 'targetAlias', 'transportKind', 'lastError'].some((key) => key in changes)) {
+  if (areaName === 'local' && ['connectionStatus', 'endpointNickname', 'targetAlias', 'transportKind', 'lastError'].some((key) => key in changes)) {
     void refresh();
   }
 });

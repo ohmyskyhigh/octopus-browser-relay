@@ -1,0 +1,732 @@
+{
+  "language": "en",
+  "type": "system_map",
+  "id": "profile-aware-browser-relay",
+  "title": "Octopus: CDP-Backed Multi-Profile Browser Automation",
+  "description": "Octopus is a CDP-backed browser automation system in which any authorized agent can control one or more isolated Chrome or AdsPower profiles through a broker. Agents discover extensions by nickname, acquire independent expiring sessionBindingRef values, and send typed or policy-gated CDP-backed commands to the intended profile. The current version-two relay is a validated transport baseline; fixed bindings and six tab operations must evolve into the many-agent, many-browser automation contract shown here.",
+  "defaultView": "pipeline",
+  "nodes": [
+    { "id": "agent-a", "name": "Agent A", "topic": "Agent client", "description": "Controls many profiles through distinct session references.", "category": "external", "logicRole": "input", "detailViewId": "v-agent-patterns", "source": { "model": "Codex", "transform": "summarized" } },
+    { "id": "agent-b", "name": "Agent B", "topic": "Agent client", "description": "Discovers and claims profiles without changing MCP setup.", "category": "external", "logicRole": "input", "detailViewId": "v-agent-patterns", "source": { "model": "Codex", "transform": "summarized" } },
+    { "id": "agent-n", "name": "Agent C", "topic": "Agent client", "description": "Runs isolated CDP automation without private browser IDs.", "category": "external", "logicRole": "input", "detailViewId": "v-agent-patterns", "source": { "model": "Codex", "transform": "summarized" } },
+    { "id": "agent-gateway", "name": "Agent Gateway (MCP)", "topic": "Agent gateway", "description": "Publishes typed CDP-backed tools and session references.", "category": "framework", "logicRole": "join", "runtimeState": "active", "detailViewId": "v-agent-gateway", "source": { "model": "Codex", "transform": "summarized", "original": "https://learn.chatgpt.com/docs/extend/mcp" } },
+    { "id": "relay-broker", "name": "Broker Core / Message Router", "topic": "Broker core", "description": "Owns profile truth, session leases, and command routing.", "category": "service", "logicRole": "process", "runtimeState": "active", "detailViewId": "v-broker", "source": { "model": "Codex", "transform": "summarized" } },
+    { "id": "alias-directory", "name": "Target & Session Binding Registry", "topic": "Session claims", "description": "Creates expiring claims and resolves private targets.", "category": "storage", "logicRole": "store", "runtimeState": "active", "detailViewId": "v-identity", "source": { "model": "Codex", "transform": "summarized" } },
+    { "id": "target-state", "name": "Broker Target State Index", "topic": "Target status", "description": "Broker-owned facts for connectivity, health, and occupancy.", "category": "storage", "logicRole": "store", "detailViewId": "v-target-state", "source": { "model": "Codex", "transform": "summarized" } },
+    { "id": "lease-manager", "name": "Session and Lease Manager", "topic": "Lease scheduler", "description": "Arbitrates competing agents and serializes target writes.", "category": "filter", "logicRole": "gate", "detailViewId": "v-leases", "source": { "model": "Codex", "transform": "summarized" } },
+    { "id": "command-journal", "name": "Durable Command Queue", "topic": "Command queue", "description": "Persists session references, commands, and outcomes.", "category": "storage", "logicRole": "queue", "runtimeState": "active", "detailViewId": "v-command-journal", "source": { "model": "Codex", "transform": "summarized" } },
+    { "id": "extension-gateway", "name": "Extension Connection Gateway", "topic": "Socket gateway", "description": "Binds private targets to live authenticated sockets.", "category": "service", "logicRole": "fork", "runtimeState": "active", "detailViewId": "v-extension-gateway", "source": { "model": "Codex", "transform": "summarized" } },
+    { "id": "native-a", "name": "Native Companion A", "topic": "Native transport", "description": "Bridges profile A through a no-proxy loopback socket.", "category": "framework", "logicRole": "process", "runtimeState": "active", "detailViewId": "v-native-companion", "source": { "model": "Codex", "transform": "summarized" } },
+    { "id": "native-b", "name": "Native Companion B", "topic": "Native transport", "description": "Bridges profile B through a no-proxy loopback socket.", "category": "framework", "logicRole": "process", "runtimeState": "active", "detailViewId": "v-native-companion", "source": { "model": "Codex", "transform": "summarized" } },
+    { "id": "native-n", "name": "Native Companion C", "topic": "Native transport", "description": "Bridges profile C through a no-proxy loopback socket.", "category": "framework", "logicRole": "process", "runtimeState": "active", "detailViewId": "v-native-companion", "source": { "model": "Codex", "transform": "summarized" } },
+    { "id": "extension-a", "name": "Extension Relay A", "topic": "CDP executor", "description": "Runs authorized CDP automation inside browser profile A.", "category": "service", "logicRole": "process", "runtimeState": "active", "detailViewId": "v-extension-protocol", "source": { "model": "Codex", "transform": "summarized" } },
+    { "id": "extension-b", "name": "Extension Relay B", "topic": "CDP executor", "description": "Runs authorized CDP automation inside browser profile B.", "category": "service", "logicRole": "process", "runtimeState": "active", "detailViewId": "v-extension-protocol", "source": { "model": "Codex", "transform": "summarized" } },
+    { "id": "extension-n", "name": "Extension Relay C", "topic": "CDP executor", "description": "Runs authorized CDP automation inside browser profile C.", "category": "service", "logicRole": "process", "runtimeState": "active", "detailViewId": "v-extension-protocol", "source": { "model": "Codex", "transform": "summarized" } },
+    { "id": "profile-a", "name": "Chrome Profile A", "topic": "Chrome profile", "description": "Own tabs, cookies, storage, and signed-in sessions.", "category": "external", "logicRole": "output", "detailViewId": "v-profile-boundary", "source": { "model": "Codex", "transform": "summarized" } },
+    { "id": "profile-b", "name": "Chrome Profile B", "topic": "Chrome profile", "description": "Own tabs, cookies, storage, and signed-in sessions.", "category": "external", "logicRole": "output", "detailViewId": "v-profile-boundary", "source": { "model": "Codex", "transform": "summarized" } },
+    { "id": "profile-n", "name": "Chrome Profile C", "topic": "Chrome profile", "description": "Own tabs, cookies, storage, and signed-in sessions.", "category": "external", "logicRole": "output", "detailViewId": "v-profile-boundary", "source": { "model": "Codex", "transform": "summarized" } }
+  ],
+  "edges": [
+    { "id": "e1", "from": "agent-a", "to": "agent-gateway", "relation": "data", "label": "MCP call + sessionBindingRef A" },
+    { "id": "e2", "from": "agent-b", "to": "agent-gateway", "relation": "data", "label": "MCP call + sessionBindingRef B" },
+    { "id": "e3", "from": "agent-n", "to": "agent-gateway", "relation": "data", "label": "MCP call + sessionBindingRef C" },
+    { "id": "e4", "from": "agent-gateway", "to": "relay-broker", "relation": "data", "label": "principal + sessionBindingRef + command" },
+    { "id": "e5", "from": "alias-directory", "to": "relay-broker", "relation": "dependency", "label": "validate live session claim; resolve target" },
+    { "id": "e6", "from": "relay-broker", "to": "lease-manager", "relation": "sequence", "label": "validated target + request policy" },
+    { "id": "e7", "from": "lease-manager", "to": "command-journal", "relation": "sequence", "label": "accepted command" },
+    { "id": "e8", "from": "command-journal", "to": "extension-gateway", "relation": "async", "label": "durably queued command" },
+    { "id": "e9", "from": "extension-gateway", "to": "native-a", "relation": "branch", "label": "target A loopback socket" },
+    { "id": "e10", "from": "extension-gateway", "to": "native-b", "relation": "branch", "label": "target B loopback socket" },
+    { "id": "e11", "from": "extension-gateway", "to": "native-n", "relation": "branch", "label": "target C loopback socket" },
+    { "id": "e12", "from": "extension-a", "to": "profile-a", "relation": "sequence", "label": "chrome.debugger / CDP" },
+    { "id": "e13", "from": "extension-b", "to": "profile-b", "relation": "sequence", "label": "chrome.debugger / CDP" },
+    { "id": "e14", "from": "extension-n", "to": "profile-n", "relation": "sequence", "label": "chrome.debugger / CDP" },
+    { "id": "e15", "from": "profile-a", "to": "extension-a", "relation": "feedback", "event": "browser result" },
+    { "id": "e16", "from": "profile-b", "to": "extension-b", "relation": "feedback", "event": "browser result" },
+    { "id": "e17", "from": "profile-n", "to": "extension-n", "relation": "feedback", "event": "browser result" },
+    { "id": "e18", "from": "native-a", "to": "extension-gateway", "relation": "feedback", "event": "ACK, result, heartbeat" },
+    { "id": "e19", "from": "native-b", "to": "extension-gateway", "relation": "feedback", "event": "ACK, result, heartbeat" },
+    { "id": "e20", "from": "native-n", "to": "extension-gateway", "relation": "feedback", "event": "ACK, result, heartbeat" },
+    { "id": "e21", "from": "extension-gateway", "to": "command-journal", "relation": "feedback", "event": "delivery and outcome update" },
+    { "id": "e22", "from": "command-journal", "to": "relay-broker", "relation": "feedback", "event": "correlated terminal result" },
+    { "id": "e23", "from": "relay-broker", "to": "agent-gateway", "relation": "feedback", "event": "response or progress event" },
+    { "id": "e24", "from": "agent-gateway", "to": "agent-a", "relation": "feedback", "event": "correlated result" },
+    { "id": "e25", "from": "agent-gateway", "to": "agent-b", "relation": "feedback", "event": "correlated result" },
+    { "id": "e26", "from": "agent-gateway", "to": "agent-n", "relation": "feedback", "event": "correlated result" },
+    { "id": "e30", "from": "extension-gateway", "to": "target-state", "relation": "feedback", "event": "connection, heartbeat, and capabilities" },
+    { "id": "e31", "from": "lease-manager", "to": "target-state", "relation": "data", "label": "active lease and queue depth" },
+    { "id": "e32", "from": "command-journal", "to": "target-state", "relation": "data", "label": "latest command state" },
+    { "id": "e33", "from": "target-state", "to": "relay-broker", "relation": "dependency", "label": "authoritative target snapshot" },
+    { "id": "e34", "from": "native-a", "to": "extension-a", "relation": "sequence", "label": "Native Messaging A" },
+    { "id": "e35", "from": "native-b", "to": "extension-b", "relation": "sequence", "label": "Native Messaging B" },
+    { "id": "e36", "from": "native-n", "to": "extension-n", "relation": "sequence", "label": "Native Messaging C" },
+    { "id": "e37", "from": "extension-a", "to": "native-a", "relation": "feedback", "event": "profile A envelope" },
+    { "id": "e38", "from": "extension-b", "to": "native-b", "relation": "feedback", "event": "profile B envelope" },
+    { "id": "e39", "from": "extension-n", "to": "native-n", "relation": "feedback", "event": "profile C envelope" }
+  ],
+  "groups": [
+    { "id": "agent-clients", "label": "Agent clients", "kind": "parallel", "nodeIds": ["agent-a", "agent-b", "agent-n"] },
+    { "id": "broker-service", "label": "One broker service", "kind": "layer", "nodeIds": ["agent-gateway", "relay-broker", "alias-directory", "target-state", "lease-manager", "command-journal", "extension-gateway"] },
+    { "id": "native-companions", "label": "Per-profile native companions", "kind": "parallel", "nodeIds": ["native-a", "native-b", "native-n"] },
+    { "id": "extension-clients", "label": "Per-profile CDP automation nodes", "kind": "parallel", "nodeIds": ["extension-a", "extension-b", "extension-n"] },
+    { "id": "browser-targets", "label": "Isolated Chrome profiles", "kind": "parallel", "nodeIds": ["profile-a", "profile-b", "profile-n"] }
+  ],
+  "views": [
+    {
+      "id": "v-agent-patterns",
+      "title": "Many Agents Can Control Many Browser Profiles",
+      "blocks": [
+        { "type": "process", "steps": [
+          { "name": "Connect", "note": "Every authorized agent discovers the same Octopus MCP toolset through its configured client profile.", "state": "current" },
+          { "name": "Discover", "note": "The agent lists nicknamed browser profiles, factual status, caller-specific acquire disposition, and CDP capabilities.", "state": "todo", "detailViewId": "v-one-to-one-binding" },
+          { "name": "Claim one or more profiles", "note": "The broker returns one independent sessionBindingRef for every profile the agent acquires.", "state": "todo" },
+          { "name": "Automate explicitly", "note": "Every typed or raw CDP-backed command carries the intended profile's sessionBindingRef.", "state": "todo" },
+          { "name": "Release independently", "note": "Each profile claim can renew, disconnect, fail, or expire without changing the agent's other browser sessions.", "state": "todo" }
+        ], "src": { "model": "Codex", "transform": "reordered" } },
+        { "type": "comparison", "cols": ["Relationship", "What changes", "What stays fixed"], "rows": [
+          ["1 agent session → 1 profile", "One temporary exclusive session claim", "CDP execution, target truth, and private identities"],
+          ["Many agent sessions → many profiles", "Broker creates and validates an independent claim for every active pair", "One MCP surface and explicit routing per command"],
+          ["1 agent session → many profiles", "Agent retains several sessionBindingRef values simultaneously", "Each profile can run independent tabs and debugger sessions"],
+          ["Many agent sessions → 1 profile", "Exclusive write lease by default; wait, deny, or policy-controlled sharing", "Broker arbitration and factual busy status"]
+        ], "src": { "model": "Codex", "transform": "summarized" } },
+        { "type": "conclusion", "title": "The core contract is many-to-many: any authorized agent can control multiple profiles while the broker resolves every explicit session binding.", "src": { "model": "Codex", "transform": "summarized" } }
+      ]
+    },
+    {
+      "id": "v-agent-gateway",
+      "title": "Northbound Gateway: MCP",
+      "blocks": [
+        { "type": "process", "steps": [
+          { "name": "Accept MCP", "note": "Expose list, acquire, dispatch, status, and release tools.", "state": "done", "detailViewId": "v-mcp-contract" },
+          { "name": "Authenticate", "note": "Map each connection or token to an agent principal; Hermes uses one profile-scoped bearer token.", "state": "done", "detailViewId": "v-hermes-mcp-install" },
+          { "name": "Validate envelope", "note": "Require sessionBindingRef on every routed browser call and validate its syntax, expiry, capabilities, domains, and limits.", "state": "todo" },
+          { "name": "Normalize", "note": "Create a versioned internal command envelope containing principal, sessionBindingRef, requestId, and deadline.", "state": "todo" },
+          { "name": "Correlate", "note": "Route progress and terminal results to the originating agent.", "state": "todo" }
+        ], "src": { "model": "Codex", "transform": "reordered", "original": "https://learn.chatgpt.com/docs/extend/mcp" } },
+        { "type": "comparison", "cols": ["Transport", "Use", "Recommendation"], "rows": [
+          ["MCP Streamable HTTP", "Multiple local or remote agents", "Canonical shared gateway"],
+          ["MCP STDIO", "One local agent starts one process", "Development fallback only"]
+        ], "src": { "model": "Codex", "transform": "summarized", "original": "https://learn.chatgpt.com/docs/extend/mcp" } },
+        { "type": "locked", "text": "Agent → MCP Streamable HTTP → Agent Gateway → Broker Core\nNo agent-facing CLI, shell parsing, or second command protocol.", "src": { "model": "Codex", "transform": "locked" } }
+      ]
+    },
+    {
+      "id": "v-hermes-mcp-install",
+      "title": "Install Octopus MCP in Hermes Agent",
+      "blocks": [
+        { "type": "process", "steps": [
+          { "name": "Register every allowed Hermes profile", "note": "Add Octopus to each selected Hermes profile because every profile owns a separate config.yaml and .env.", "state": "current" },
+          { "name": "Provision one principal per profile", "note": "Give each Hermes profile a distinct non-admin token for discovery, session claims, and browser work without owning a target.", "state": "todo" },
+          { "name": "Keep browser choice out of installation", "note": "Do not reserve Profile A, B, C, or D here; every Hermes conversation selects an available extension when it needs one.", "state": "todo" },
+          { "name": "Add the HTTP MCP", "note": "Run Hermes mcp add against http://127.0.0.1:7331/mcp with header authentication and enter only the dedicated token.", "state": "todo" },
+          { "name": "Limit the tool surface", "note": "Expose browser-shaped tools through the mcp-octopus toolset; keep administration tools unavailable to the Hermes principal.", "state": "todo", "detailViewId": "v-hermes-browser-tool-surface" },
+          { "name": "Test and reload", "note": "Run Hermes mcp test, reload MCP, and verify that mcp__octopus__list_extensions appears before any session claim exists.", "state": "todo" }
+        ], "src": { "model": "Codex", "transform": "reordered", "original": "https://github.com/NousResearch/hermes-agent/blob/main/website/docs/user-guide/features/mcp.md" } },
+        { "type": "comparison", "cols": ["Hermes profile", "Local state", "Configuration file"], "rows": [
+          ["default (example)", "Example: MCP registration pending", "%LOCALAPPDATA%/hermes/config.yaml"],
+          ["profile-a (example)", "Example: MCP registration pending", "%LOCALAPPDATA%/hermes/profiles/profile-a/config.yaml"],
+          ["profile-b (example)", "Example: MCP registration pending", "%LOCALAPPDATA%/hermes/profiles/profile-b/config.yaml"],
+          ["profile-c (example)", "Example: MCP registration pending", "%LOCALAPPDATA%/hermes/profiles/profile-c/config.yaml"]
+        ], "src": { "model": "Codex", "transform": "summarized" } },
+        { "type": "locked", "text": "%LOCALAPPDATA%\\hermes\\bin\\hermes.exe -p <profile> mcp add octopus --url http://127.0.0.1:7331/mcp --auth header\n%LOCALAPPDATA%\\hermes\\bin\\hermes.exe -p <profile> mcp test octopus\n\nHermes stores the token in that profile's .env as MCP_OCTOPUS_API_KEY and writes Authorization: Bearer ${MCP_OCTOPUS_API_KEY} to config.yaml.", "src": { "model": "Codex", "transform": "locked", "original": "https://github.com/NousResearch/hermes-agent/blob/main/website/docs/user-guide/features/mcp.md" } },
+        { "type": "risk", "items": [
+          { "sev": "danger", "title": "Administrator token exposed to Hermes", "text": "An admin token would give the model pairing, rebinding, renaming, and revocation authority; provision a least-privilege principal instead." },
+          { "sev": "danger", "title": "Browser hard-bound during installation", "text": "Installing the MCP must not reserve or replace Profile A, B, C, or any future extension; browser ownership begins only when a session acquires a claim." },
+          { "sev": "warning", "title": "Wrong Hermes profile configured", "text": "MCP configuration is profile-scoped; adding it to one profile does not make it appear in another profile." }
+        ], "src": { "model": "Codex", "transform": "summarized" } },
+        { "type": "conclusion", "title": "Register Octopus once in every allowed Hermes profile; every session can then discover the tool and choose a browser by nickname.", "support": [
+          "Installed Hermes Agent v0.20.5 exposes mcp add, list, test, and configure commands",
+          "The Hermes credential identifies the caller but does not permanently own any extension",
+          "Connected Chrome and AdsPower profiles remain a broker-managed pool until a session claims one"
+        ], "src": { "model": "Codex", "transform": "summarized" } }
+      ]
+    },
+    {
+      "id": "v-hermes-browser-tool-surface",
+      "title": "Make Octopus a Native Hermes Browser Toolset",
+      "blocks": [
+        { "type": "process", "steps": [
+          { "name": "1. Register and publish the tool", "note": "Configure Octopus MCP once in each allowed Hermes profile so its agents discover the safe mcp-octopus toolset in every new session.", "state": "current" },
+          { "name": "2. Find extensions by nickname", "note": "The session calls list_extensions and receives unique nicknames, factual status, caller-specific acquire disposition, and supported capabilities.", "state": "todo" },
+          { "name": "3. Connect and control multiple profiles", "note": "The agent connects to one or more nicknames, keeps a sessionBindingRef for each, and sends browser or permitted CDP commands to the intended profile.", "state": "todo", "detailViewId": "v-current-browser-support" }
+        ], "src": { "model": "Codex", "transform": "reordered", "original": "https://hermes-agent.nousresearch.com/docs/user-guide/features/mcp" } },
+        { "type": "comparison", "cols": ["Hermes tool", "Input", "Result"], "rows": [
+          ["mcp__octopus__list_extensions", "Optional claimableOnly filter", "Nickname, status truth, acquire disposition, and capabilities"],
+          ["mcp__octopus__connect_extension", "Nickname and optional idempotency key", "sessionBindingRef, nickname, expiry, and capabilities"],
+          ["mcp__octopus__disconnect_extension", "sessionBindingRef", "Idempotent release back to the available pool"]
+        ], "src": { "model": "Codex", "transform": "summarized", "original": "https://hermes-agent.nousresearch.com/docs/developer-guide/plugins" } },
+        { "type": "comparison", "cols": ["Control surface", "Input", "Policy"], "rows": [
+          ["mcp__octopus__browser_<operation>", "sessionBindingRef plus typed parameters", "Default: tabs, navigation, snapshot, script, and other narrow operations"],
+          ["mcp__octopus__cdp_command", "sessionBindingRef, CDP method, and parameters", "Optional: only when the extension advertises cdp and the principal has browser:cdp"]
+        ], "src": { "model": "Codex", "transform": "summarized" } },
+        { "type": "locked", "text": "mcp__octopus__list_extensions({})\n← [{ nickname: 'research', status: 'available', acquireDisposition: 'allow', capabilities: ['tabs', 'snapshot'] },\n   { nickname: 'ads-sales', status: 'busy', acquireDisposition: 'deny', reasonCode: 'LEASED' }]\n\nmcp__octopus__connect_extension({ nickname: 'research' })\n← { sessionBindingRef: 'sbr_…', nickname: 'research', expiresAt: '…' }\n\nmcp__octopus__browser_open_url({ sessionBindingRef: 'sbr_…', url: 'https://example.com' })\n\nmcp__octopus__disconnect_extension({ sessionBindingRef: 'sbr_…' })\n\nNickname selects the target only during the atomic connect operation; subsequent commands use the session binding so nickname changes cannot reroute live work.", "src": { "model": "Codex", "transform": "locked", "original": "https://hermes-agent.nousresearch.com/docs/reference/mcp-config-reference" } },
+        { "type": "risk", "items": [
+          { "sev": "danger", "title": "Nickname used for every command", "text": "A rename or race could redirect work; resolve nickname only when connecting and require sessionBindingRef afterward." },
+          { "sev": "danger", "title": "Unrestricted raw CDP", "text": "The current extension does not expose raw CDP. Adding it requires Chrome debugger permission, capability advertisement, method policy, and strict session ownership." },
+          { "sev": "warning", "title": "Discovery confused with authorization", "text": "All configured agents may see the Octopus tools, but list and connect results remain filtered by each principal's broker policy." }
+        ], "src": { "model": "Codex", "transform": "summarized" } },
+        { "type": "conclusion", "title": "Let every authorized Hermes session discover Octopus and control any permitted set of uniquely nicknamed profiles through independent temporary bindings.", "support": [
+          "Tool discovery can be broad while connection authority remains policy-filtered",
+          "Status is factual; acquireDisposition is the broker's caller-specific decision",
+          "Typed browser operations ship first, while raw CDP remains an explicit optional capability"
+        ], "src": { "model": "Codex", "transform": "summarized", "original": "https://hermes-agent.nousresearch.com/docs/reference/toolsets-reference" } }
+      ]
+    },
+    {
+      "id": "v-current-browser-support",
+      "title": "Current v0.2 Support Versus the Proposed v3 Surface",
+      "blocks": [
+        { "type": "process", "steps": [
+          { "name": "Discover the fixed target", "note": "Today the agent uses list_targets, get_my_binding, or get_target; it cannot select an unbound nickname.", "state": "done" },
+          { "name": "Acquire an exclusive lease", "note": "acquire_session accepts the durable bindingRef and returns an opaque, time-bounded sessionHandle; the broker stores only its hash.", "state": "done" },
+          { "name": "Dispatch an allowlisted operation", "note": "dispatch validates the operation and parameters, persists the command, and routes it through the broker.", "state": "done" },
+          { "name": "Execute through the extension", "note": "The extension uses chrome.tabs and chrome.scripting for six implemented operations.", "state": "done" },
+          { "name": "Read the durable outcome", "note": "The agent receives a command receipt and can query get_command for state or result.", "state": "done" },
+          { "name": "Add the CDP automation backend", "note": "v3 needs nickname sessions, debugger attachment, typed interaction tools, bounded CDP events, raw-command policy, cleanup, and recovery tests.", "state": "todo", "detailViewId": "v-cdp-automation-layer" }
+        ], "src": { "model": "Codex", "transform": "reordered", "original": "packages/mcp-gateway/src/server.ts" } },
+        { "type": "comparison", "cols": ["Implemented operation", "Behavior", "Important limit"], "rows": [
+          ["list_tabs / get_active_tab", "Return sanitized tab ID, window, active, pinned, title, URL, and loading status", "Read-only tab metadata"],
+          ["open_url / activate_tab", "Create an HTTP(S) tab or activate an existing tab ID", "No close, duplicate, move, or window-management command"],
+          ["navigate", "Navigate a supplied tab ID or the active tab to an HTTP(S) URL", "No back, forward, reload, or navigation-wait primitive"],
+          ["snapshot", "Return title and visible body text through chrome.scripting", "Restricted to 127.0.0.1 and localhost fixtures; maximum 50,000 characters"]
+        ], "src": { "model": "Codex", "transform": "summarized", "original": "apps/extension/src/executor/browser-executor.ts" } },
+        { "type": "comparison", "cols": ["Capability", "Current v0.2", "Target v3"], "rows": [
+          ["Nickname selection", "Alias exists for administration, but agents route through a preassigned bindingRef", "Session calls list_extensions then connect_extension by nickname"],
+          ["Browser command surface", "One generic dispatch tool with six allowlisted operations", "Explicit browser_<operation> MCP tools"],
+          ["Raw CDP", "Not supported; manifest has no debugger permission", "Optional cdp_command only with capability, scope, and method policy"],
+          ["Interaction automation", "No click, type, screenshot, selector, cookie, download, or network tools", "Add typed tools deliberately or a tightly controlled CDP surface"]
+        ], "src": { "model": "Codex", "transform": "summarized", "original": "apps/extension/manifest.json" } },
+        { "type": "risk", "items": [
+          { "sev": "danger", "title": "Calling current snapshot a general page snapshot", "text": "It intentionally returns no DOM for non-loopback pages, so it cannot inspect ordinary websites today." },
+          { "sev": "danger", "title": "Advertising CDP before permission and policy exist", "text": "chrome.debugger is absent, and unrestricted CDP would expand browser authority far beyond the current allowlist." },
+          { "sev": "warning", "title": "Confusing working transport with packaged installation", "text": "Chrome and AdsPower transport works, but the public Native Messaging installer and public agent-provisioning CLI remain unbundled." }
+        ], "src": { "model": "Codex", "transform": "summarized" } },
+        { "type": "conclusion", "title": "Today Octopus is a secure tab-routing relay, not yet a full browser-automation or raw-CDP tool.", "support": [
+          "Fourteen MCP tools cover discovery, fixed bindings, sessions, dispatch, command status, and administration",
+          "Six extension operations cover tab inventory, activation, creation, navigation, and loopback text snapshots",
+          "Dynamic nickname session selection and broad interaction remain v3 implementation work"
+        ], "src": { "model": "Codex", "transform": "summarized", "original": "packages/protocol/src/schemas.ts" } }
+      ]
+    },
+    {
+      "id": "v-cdp-automation-layer",
+      "title": "CDP-Backed Website Automation Layer",
+      "blocks": [
+        { "type": "process", "steps": [
+          { "name": "Connect to one or more nicknames", "note": "Hermes acquires a separate broker sessionBindingRef for every available Chrome or AdsPower profile it needs.", "state": "todo" },
+          { "name": "Select a tab and attach", "note": "The broker authorizes the tab operation; the extension calls chrome.debugger.attach with protocol version 0.1 and returns an opaque debuggerSessionRef.", "state": "todo" },
+          { "name": "Enable required domains", "note": "Turn on only the CDP domains needed by the requested automation, including Page, Runtime, DOM, Input, or Network.", "state": "todo" },
+          { "name": "Execute typed actions", "note": "Hermes normally calls browser_click, browser_type, browser_wait, browser_snapshot, browser_screenshot, browser_evaluate, and navigation tools.", "state": "todo" },
+          { "name": "Use gated raw CDP when necessary", "note": "cdp_command validates domain, method, parameters, scope, target, size, and deadline before chrome.debugger.sendCommand.", "state": "todo" },
+          { "name": "Drain events and clean up", "note": "Filter and bound onEvent traffic, record correlated outcomes, handle onDetach, detach the debugger, and release the browser lease.", "state": "todo" }
+        ], "src": { "model": "Codex", "transform": "reordered", "original": "https://developer.chrome.com/docs/extensions/reference/api/debugger" } },
+        { "type": "comparison", "cols": ["CDP domains", "Automation capability", "Default policy"], "rows": [
+          ["DOM, DOMSnapshot, Runtime", "Inspect documents, locate elements, evaluate expressions, and collect structured page state", "Allow typed read tools; gate arbitrary Runtime.evaluate"],
+          ["Input", "Mouse, keyboard, touch, focus, scrolling, and form interaction", "Allow only through an active browser session and selected tab"],
+          ["Page, Target, Emulation", "Navigation, lifecycle, screenshots, dialogs, frames, popups, and viewport behavior", "Allow typed tools; explicitly manage child targets and frames"],
+          ["Network, Fetch, Storage", "Wait for requests, inspect traffic, intercept flows, and access browser storage", "Privileged scopes with redaction, event filters, and payload limits"]
+        ], "src": { "model": "Codex", "transform": "summarized", "original": "https://developer.chrome.com/docs/extensions/reference/api/debugger" } },
+        { "type": "comparison", "cols": ["Surface", "Role", "Recommendation"], "rows": [
+          ["Typed browser tools", "Stable actions such as click, type, wait, snapshot, screenshot, evaluate, and navigate", "Default surface for Hermes-created automations"],
+          ["Raw cdp_command", "Escape hatch for supported CDP methods not yet wrapped", "Disabled by default; require browser:cdp and method policy"],
+          ["CDP event stream", "Lifecycle, network, console, target, and debugger-detach events", "Subscription filters, bounded buffers, and backpressure; never dump every event into the model"],
+          ["Persistent automation runtime", "Schedules and resumes saved workflows independently of the agent conversation", "Add later only if automations must outlive Hermes sessions"]
+        ], "src": { "model": "Codex", "transform": "summarized" } },
+        { "type": "locked", "text": "Hermes automation\n  → list_extensions()\n  → connect_extension({ nickname: 'research' }) ← { sessionBindingRef: 'sbr_research' }\n  → connect_extension({ nickname: 'ads-sales' }) ← { sessionBindingRef: 'sbr_sales' }\n  → browser_attach({ sessionBindingRef: 'sbr_research', tabId }) ← { debuggerSessionRef }\n  → browser_click | browser_type | browser_wait | browser_snapshot | browser_screenshot\n     or cdp_command({ sessionBindingRef, debuggerSessionRef, method, params })\n  ← correlated result plus filtered events\n  → detach and disconnect each profile independently\n\nThere is no implicit current browser. Every browser command identifies exactly one active profile session.", "src": { "model": "Codex", "transform": "locked" } },
+        { "type": "risk", "items": [
+          { "sev": "danger", "title": "Debugger permission changes the trust level", "text": "Chrome requires the non-optional debugger permission and warns that the extension can access the page debugger backend and read or change data on all websites." },
+          { "sev": "danger", "title": "DevTools detaches the automation", "text": "Opening Chrome DevTools on an attached tab can trigger chrome.debugger.onDetach; surface a deterministic DEBUGGER_DETACHED result and never silently continue." },
+          { "sev": "warning", "title": "Unbounded CDP events overload the relay", "text": "Network and tracing domains can produce high-volume data; require subscriptions, byte limits, redaction, backpressure, and drop accounting." },
+          { "sev": "warning", "title": "Current minimum Chrome version is too low for debugger keepalive", "text": "Active debugger sessions keep Manifest V3 workers alive from Chrome 118; raise the current minimum from 116 or implement explicit reattach recovery." }
+        ], "src": { "model": "Codex", "transform": "summarized", "original": "https://developer.chrome.com/docs/extensions/develop/concepts/service-workers/lifecycle" } },
+        { "type": "conclusion", "title": "Octopus is a many-agent, many-profile CDP automation system: typed MCP tools are the normal interface and raw commands are a scoped escape hatch.", "support": [
+          "This covers real website navigation, inspection, interaction, screenshots, frames, waits, and network-aware automation",
+          "The broker preserves nickname sessions, isolation, durability, and status truth while the extension owns browser-local CDP state",
+          "Some browser-internal or protected surfaces remain outside normal website automation even with CDP"
+        ], "src": { "model": "Codex", "transform": "summarized", "original": "https://developer.chrome.com/docs/extensions/reference/api/debugger" } }
+      ]
+    },
+    {
+      "id": "v-mcp-contract",
+      "title": "MCP Layer: Protocol Adapter and Policy Edge",
+      "blocks": [
+        { "type": "process", "steps": [
+          { "name": "Accept tool call", "note": "Receive either a discovery/session-management call or a browser call carrying sessionBindingRef over Streamable HTTP.", "state": "current" },
+          { "name": "Authenticate agent", "note": "Verify the bearer token and load the agent principal and scopes.", "state": "done" },
+          { "name": "Validate input", "note": "Discovery needs no claim; connect needs a safe nickname; browser calls require sessionBindingRef.", "state": "todo" },
+          { "name": "Create context", "note": "Add requestId, authenticated principal, sessionBindingRef when present, deadline, and cancellation signal.", "state": "todo" },
+          { "name": "Call broker core", "note": "Invoke one in-process broker method without touching sockets or SQL.", "state": "todo", "detailViewId": "v-local-broker-layer" },
+          { "name": "Return MCP result", "note": "Map accepted, completed, failed, or unavailable into typed output.", "state": "todo" }
+        ], "src": { "model": "Codex", "transform": "reordered", "original": "https://learn.chatgpt.com/docs/extend/mcp" } },
+        { "type": "comparison", "cols": ["Tool group", "MCP tools", "Required scope"], "rows": [
+          ["Discovery", "list_extensions, get_extension_status", "targets:read"],
+          ["Sessions", "connect_extension, renew_connection, disconnect_extension", "sessions:write"],
+          ["Browser work", "browser_<operation>, get_command, optional cdp_command", "browser:read, browser:write, or browser:cdp"],
+          ["Administration", "pair_target, rename_target, revoke_target, broker_health", "broker:admin"]
+        ], "src": { "model": "Codex", "transform": "summarized", "original": "https://learn.chatgpt.com/docs/extend/mcp" } },
+        { "type": "locked", "text": "ConnectRequest { nickname, requestedTtlMs?, idempotencyKey? }\nConnectReply { sessionBindingRef, nickname, expiresAt, capabilities }\nBrowserRequest { sessionBindingRef, requestId, operation, parameters, deadlineMs, idempotencyKey }\nauthenticate → RequestContext { principal, scopes, sessionBindingRef?, requestId, deadline }\nThe broker-issued sessionBindingRef explicitly represents the temporary relationship, so an MCP transport is never treated as the Hermes conversation identity.", "src": { "model": "Codex", "transform": "locked" } },
+        { "type": "conclusion", "title": "The MCP layer owns protocol, authentication, schemas, and response mapping; it does not own browser routing or durable state.", "support": [
+          "One typed interface for every agent",
+          "Bearer tokens are sufficient for a loopback-first deployment",
+          "Broker internals remain replaceable without changing MCP tools"
+        ], "src": { "model": "Codex", "transform": "summarized" } }
+      ]
+    },
+    {
+      "id": "v-broker",
+      "title": "The Middle Component Is the Broker Core",
+      "blocks": [
+        { "type": "process", "steps": [
+          { "name": "Receive", "note": "Accept a discovery, session claim, release, or normalized browser command from the authenticated MCP principal.", "state": "current", "detailViewId": "v-local-broker-layer" },
+          { "name": "Validate and resolve", "note": "For browser work, match principal plus active sessionBindingRef, verify expiry, then resolve the private target.", "state": "todo", "detailViewId": "v-call-routing-envelope" },
+          { "name": "Schedule", "note": "Apply ACLs, leases, deadlines, and per-target serialization.", "state": "current" },
+          { "name": "Journal", "note": "Persist intent before the command is offered to a socket.", "state": "current" },
+          { "name": "Route", "note": "Select the live socket bound to the resolved private target.", "state": "todo" },
+          { "name": "Correlate", "note": "Join acknowledgements and results to agent request IDs.", "state": "todo" }
+        ], "src": { "model": "Codex", "transform": "reordered" } },
+        { "type": "comparison", "cols": ["Module", "Owns", "Does not expose"], "rows": [
+          ["Target & Session Binding Registry", "paired targets, active session claims, expiry, principal ownership, ACL", "Private target IDs"],
+          ["Lease Manager", "Target ownership and wait queues", "Extension socket details"],
+          ["Command Queue", "Command state and deduplication", "Browser credentials"],
+          ["Router", "Target-to-live-socket lookup", "Raw connection IDs"]
+        ], "src": { "model": "Codex", "transform": "summarized" } },
+        { "type": "locked", "text": "CommandEnvelope { version, requestId, commandId, agentPrincipal, sessionBindingRef, resolvedTargetId, operation, parameters, deadline, idempotencyKey }\nresolvedTargetId exists only inside the broker boundary. sessionBindingRef expires and cannot be reused by a different principal or client session.", "src": { "model": "Codex", "transform": "locked" } }
+      ]
+    },
+    {
+      "id": "v-local-broker-layer",
+      "title": "Local Broker Layer: Stateful Control Plane",
+      "blocks": [
+        { "type": "process", "steps": [
+          { "name": "Receive context", "note": "Accept authenticated discovery, acquire, renew, release, or browser-command context.", "state": "current" },
+          { "name": "Create or validate session claim", "note": "Acquire atomically reserves an available target; browser work requires a live row matching principal, client session, and sessionBindingRef.", "state": "todo", "detailViewId": "v-call-routing-envelope" },
+          { "name": "Resolve target", "note": "Translate the validated ephemeral claim to one private target record and current connection mapping.", "state": "todo" },
+          { "name": "Read target state", "note": "Load connectivity, health, occupancy, capabilities, and version.", "state": "current", "detailViewId": "v-target-state" },
+          { "name": "Decide delivery", "note": "Apply request policy to facts and produce a separate disposition.", "state": "todo", "detailViewId": "v-routing-decision" },
+          { "name": "Persist command", "note": "Create command ID and store QUEUED state before any delivery.", "state": "todo" },
+          { "name": "Track execution", "note": "Commit ACK, RUNNING, result, timeout, or unknown transitions.", "state": "todo" },
+          { "name": "Complete request", "note": "Return the correlated broker result to the waiting MCP call.", "state": "todo" }
+        ], "src": { "model": "Codex", "transform": "reordered" } },
+        { "type": "comparison", "cols": ["Broker boundary", "Input", "Output"], "rows": [
+          ["Target & Session Binding Registry", "principal, nickname, and sessionBindingRef", "private target record or session rejection"],
+          ["Target State Index", "private target record", "available, busy, offline, or error facts"],
+          ["Lease Scheduler", "target, mode, deadline", "lease grant, queued wait, or busy"],
+          ["Command and Router", "validated operation", "durable command state and relay outcome"]
+        ], "src": { "model": "Codex", "transform": "summarized" } },
+        { "type": "locked", "text": "BrokerCore.connect({ principal, nickname, ttl, idempotencyKey? }) → { sessionBindingRef, expiresAt, capabilities }\nBrokerCore.dispatch({ principal, sessionBindingRef, requestId, deadline }, command) → { commandId, state, result? }\nBrokerCore.disconnect({ principal, sessionBindingRef }) → { released: true }\nMCP adapter + BrokerCore + SQLite + connection gateway remain one process; the broker is the sole source of session and routing truth.", "src": { "model": "Codex", "transform": "locked" } },
+        { "type": "process", "steps": [
+          { "name": "Keep the validated v2 baseline", "note": "SQLite migration 003, durable command correlation, gateway integration, and live A/B/C isolation remain the proven starting point.", "state": "done", "detailViewId": "v-implementation-roadmap" },
+          { "name": "Refactor ownership for v3", "note": "Add ephemeral browser_session_bindings and change discovery, acquire, renew, release, dispatch, and cleanup contracts without changing extension pairing.", "state": "todo" },
+          { "name": "Repeat release gates", "note": "Test multiple Hermes sessions choosing browsers, busy contention, crash expiry, release, reassignment, and message correlation.", "state": "todo", "detailViewId": "v-real-world-validation" }
+        ], "src": { "model": "Codex", "transform": "summarized" } },
+        { "type": "risk", "items": [
+          { "sev": "danger", "title": "MCP layer writes SQLite directly", "text": "This bypasses broker invariants and creates two sources of command truth." },
+          { "sev": "danger", "title": "Command delivered before persistence", "text": "A crash could perform a browser action without a recoverable command record." },
+          { "sev": "warning", "title": "Long MCP request", "text": "Return accepted plus commandId when browser work may exceed the tool deadline." }
+        ], "src": { "model": "Codex", "transform": "summarized" } }
+      ]
+    },
+    {
+      "id": "v-target-state",
+      "title": "Broker-Owned Facts and Derived Target Status",
+      "blocks": [
+        { "type": "process", "steps": [
+          { "name": "Register target", "note": "Persist private identity, friendly alias, public key, and policy.", "state": "done" },
+          { "name": "Track connectivity", "note": "Record whether an authenticated extension socket is connected.", "state": "done" },
+          { "name": "Track health", "note": "Measure heartbeat freshness, response latency, timeouts, and errors.", "state": "current" },
+          { "name": "Track occupancy", "note": "Record whether a valid lease currently belongs to another agent.", "state": "current" },
+          { "name": "Derive status", "note": "Compute available, busy, offline, or error from those facts.", "state": "todo" },
+          { "name": "Version snapshot", "note": "Increment the version whenever any factual dimension changes.", "state": "todo" },
+          { "name": "Expose safe view", "note": "Return alias, factual status, and capabilities without private IDs.", "state": "todo" }
+        ], "src": { "model": "Codex", "transform": "reordered" } },
+        { "type": "comparison", "cols": ["Target status", "Broker evidence", "Meaning only"], "rows": [
+          ["available", "connected, healthy, and no active conflicting lease", "target can accept compatible work"],
+          ["busy", "connected and healthy, but occupied by another lease", "target is currently taken"],
+          ["offline", "no authenticated extension connection exists", "extension is not connected"],
+          ["error", "connected or recently connected but unresponsive or repeatedly failing", "target health is bad"]
+        ], "src": { "model": "Codex", "transform": "summarized" } },
+        { "type": "locked", "text": "TargetSnapshot { alias, privateTargetId, connectivity, health, occupancy, capabilities, lastSeen, errorWindow, status, statusVersion }\nTargetStatus = facts only. It never contains deliver, queue, wait, or reject.\nOnly the broker reads privateTargetId or connection identifiers.", "src": { "model": "Codex", "transform": "locked" } },
+        { "type": "conclusion", "title": "Extensions report observations; the broker owns the factual snapshot, while a separate evaluator makes request-specific decisions.", "support": [
+          "Agents cannot select raw profile or connection IDs",
+          "Status says what is true, not what the broker should do",
+          "The same status may produce different decisions for different requests"
+        ], "src": { "model": "Codex", "transform": "summarized" } }
+      ]
+    },
+    {
+      "id": "v-routing-decision",
+      "title": "Request Decision Is Separate from Target Status",
+      "blocks": [
+        { "type": "process", "steps": [
+          { "name": "Read request", "note": "Load agent, operation, capability, wait policy, and deadline.", "state": "done" },
+          { "name": "Read snapshot", "note": "Load one immutable target snapshot and its status version.", "state": "done" },
+          { "name": "Check authority", "note": "Evaluate agent ACL, target policy, and required capability.", "state": "current" },
+          { "name": "Apply policy", "note": "Combine factual status with wait, retry, and lease rules.", "state": "current" },
+          { "name": "Choose disposition", "note": "Produce deliver, queue, wait, or reject with a reason code.", "state": "todo" },
+          { "name": "Guard version", "note": "Re-evaluate if target status changed before the decision commits.", "state": "todo" }
+        ], "src": { "model": "Codex", "transform": "reordered" } },
+        { "type": "comparison", "cols": ["Factual status", "Possible decisions", "Depends on"], "rows": [
+          ["available", "deliver or reject", "authorization and capability"],
+          ["busy", "queue, wait, or reject", "wait policy, deadline, and lease mode"],
+          ["offline", "wait for reconnect or reject", "reconnect policy and deadline"],
+          ["error", "retry later, open circuit, or reject", "error budget and operation risk"]
+        ], "src": { "model": "Codex", "transform": "summarized" } },
+        { "type": "locked", "text": "TargetStatus != RoutingDecision\nRoutingDecision { disposition, reasonCode, evaluatedStatusVersion, retryAfter? }\nA decision is valid only for one request evaluated against one status version.", "src": { "model": "Codex", "transform": "locked" } },
+        { "type": "conclusion", "title": "Status is shared truth; disposition is a per-request policy result.", "src": { "model": "Codex", "transform": "summarized" } }
+      ]
+    },
+    {
+      "id": "v-implementation-roadmap",
+      "title": "Implementation Roadmap: Contracts to Release",
+      "blocks": [
+        { "type": "process", "steps": [
+          { "name": "1. Contracts", "note": "The v2 MCP schema requires bindingRef on every target-specific call and rejects alias selectors.", "state": "done" },
+          { "name": "2. Durable truth", "note": "Migration 003 adds exclusive bindings and persists bindingRef with commands and traces.", "state": "done" },
+          { "name": "3. Broker opinion", "note": "The broker validates principal ownership before status, lease, and routing policy evaluation.", "state": "done" },
+          { "name": "4. Extension path", "note": "The existing Native Messaging and authenticated WebSocket path remains unchanged and connected.", "state": "done" },
+          { "name": "5. MCP path", "note": "Fourteen tools now include get_my_binding, bind_agent, unbind_agent, and list_bindings.", "state": "done" },
+          { "name": "6. Dynamic session binding", "note": "Replace durable agent-target ownership with list, acquire, renew, release, TTL cleanup, and required sessionBindingRef on browser tools.", "state": "todo", "detailViewId": "v-one-to-one-binding" },
+          { "name": "7. Release gate", "note": "Repeat multi-Hermes-session contention, crash-expiry, reassignment, native installation, and public install smoke tests before release.", "state": "todo", "detailViewId": "v-open-source-release" }
+        ], "src": { "model": "Codex", "transform": "reordered" } },
+        { "type": "comparison", "cols": ["Milestone", "Primary packages", "Verification gate"], "rows": [
+          ["Contracts", "packages/protocol", "Schema fuzzing and secret-field leak tests"],
+          ["Broker truth", "storage + broker-core", "Restart, state derivation, and concurrency tests"],
+          ["Broker opinion", "routing + leases + journal", "Decision branch coverage and status-version race tests"],
+          ["Extension path", "extension-gateway + native-host + apps/extension", "Chrome and AdsPower profiles through Native Messaging plus loopback WebSocket"]
+        ], "src": { "model": "Codex", "transform": "summarized" } },
+        { "type": "comparison", "cols": ["Milestone", "Primary packages", "Verification gate"], "rows": [
+          ["Agent path", "mcp-gateway + session bindings", "Dynamic acquire, foreign-session rejection, TTL expiry, and reassignment"],
+          ["Release", "apps/broker + runbooks", "pnpm verify, soak test, and install smoke test"]
+        ], "src": { "model": "Codex", "transform": "summarized" } },
+        { "type": "locked", "text": "Critical commit rule:\nread snapshot → evaluate broker opinion → begin transaction → recheck statusVersion and lease → persist command → deliver after commit\nIf the version changed, discard the opinion and reevaluate.", "src": { "model": "Codex", "transform": "locked" } },
+        { "type": "risk", "items": [
+          { "sev": "danger", "title": "Ambiguous non-idempotent execution", "text": "After ACK plus disconnect, record UNKNOWN_OUTCOME; never silently replay the browser action." },
+          { "sev": "danger", "title": "Cross-profile routing", "text": "Fence sockets by authenticated target and connection epoch, then prove isolation with two Chrome user-data directories." },
+          { "sev": "warning", "title": "Service-worker suspension", "text": "Use an application heartbeat, reconnect jitter, durable broker commands, and restart tests instead of trusting a permanent socket." }
+        ], "src": { "model": "Codex", "transform": "summarized" } },
+        { "type": "conclusion", "title": "The v0.2.0 implementation is deployed; final release qualification now focuses on long-duration dedicated-binding recovery and soak behavior.", "support": [
+          "Historical v0.1 plan: doc/80-Plans/profile-aware-browser-relay-2026-08-27",
+          "Exactly three plan documents: overview, technical architecture, and implementation tasks",
+          "One executable verification command: pnpm verify"
+        ], "src": { "model": "Codex", "transform": "summarized" } }
+      ]
+    },
+    {
+      "id": "v-open-source-release",
+      "title": "Open-Source Release Gate",
+      "blocks": [
+        { "type": "process", "steps": [
+          { "name": "Draft the public README", "note": "Done: the repository now explains the problem, architecture, trust boundary, binding flow, setup, tools, verification, and current limitations.", "state": "done" },
+          { "name": "Choose and add a license", "note": "Done: the project is licensed under MIT and the public README links the license terms.", "state": "done" },
+          { "name": "Package agent provisioning", "note": "Add a supported local create-agent and revoke-agent command so users do not need the storage API or test harness.", "state": "current" },
+          { "name": "Package Native Messaging", "note": "Commit a Windows host manifest plus install, verify, and uninstall commands for regular Chrome and AdsPower.", "state": "todo" },
+          { "name": "Harden repository hygiene", "note": "Done: the Git index excludes local credentials, databases, native binaries, generated test packages, and qualification artifacts.", "state": "done" },
+          { "name": "Publish public source", "note": "Done: the reviewed v0.2.0 source is public at github.com/ohmyskyhigh/octopus-browser-relay as an explicitly labeled pre-release.", "state": "done" }
+        ], "src": { "model": "Codex", "transform": "reordered" } },
+        { "type": "comparison", "cols": ["Release surface", "Current truth", "Public-release condition"], "rows": [
+          ["Documentation", "README and architecture are public", "Keep setup limits and release state accurate"],
+          ["Legal", "MIT License selected and added", "Keep copyright and license links intact"],
+          ["Onboarding", "Core works; provisioning and native setup use development paths", "Supported CLI and installer complete the full flow"],
+          ["Evidence", "Automated suite and live A/B/C isolation passed", "Physical recovery soak and install smoke pass"]
+        ], "src": { "model": "Codex", "transform": "summarized" } },
+        { "type": "risk", "items": [
+          { "sev": "warning", "title": "Pre-release expectations", "text": "The public repository must state that provisioning and Native Messaging installation are not yet packaged for general users." },
+          { "sev": "danger", "title": "Publishing an incomplete install path", "text": "AdsPower depends on the Native Messaging route, so the host manifest and installer must ship with the extension." },
+          { "sev": "warning", "title": "Leaking local qualification material", "text": "Clean-clone and secret scans must exclude .relay-data, credentials, database files, tokens, pairing codes, and local run artifacts." }
+        ], "src": { "model": "Codex", "transform": "summarized" } },
+        { "type": "conclusion", "title": "Octopus Browser Relay is now public under the MIT License as a clearly labeled pre-release.", "support": [
+          "Public repository: github.com/ohmyskyhigh/octopus-browser-relay",
+          "Provisioning CLI and Native Messaging installer remain the primary onboarding gaps",
+          "A later packaged release still requires clean-machine installation and the revised three-profile soak"
+        ], "src": { "model": "Codex", "transform": "summarized" } }
+      ]
+    },
+    {
+      "id": "v-real-world-validation",
+      "title": "Real-World Test: Multiple Chrome Profiles and Codex Tasks",
+      "blocks": [
+        { "type": "process", "steps": [
+          { "name": "Pass automation first", "note": "Green on v0.2.0: lint, strict types, 25 unit/contract/integration/fault tests, dedicated-binding E2E, production builds, and smoke test.", "state": "done" },
+          { "name": "Migrate and reconnect profiles", "note": "Passed: migration 003 preserved three targets; the restarted broker reports three connected targets and three active bindings.", "state": "done" },
+          { "name": "Authenticate dedicated agents", "note": "Passed: credentials A, B, and C each resolved one unique bindingRef for rw-profile-a, rw-profile-b, and rw-profile-c.", "state": "done", "detailViewId": "v-u2-task-setup" },
+          { "name": "Run live routing tests", "note": "Passed: one real list_tabs command per profile reached SUCCEEDED and each returned command retained the call's bindingRef.", "state": "done" },
+          { "name": "Verify isolation and restart", "note": "Passed: Agent A using Agent B's bindingRef returned BINDING_FORBIDDEN; all three extensions reauthenticated after the broker upgrade restart.", "state": "done", "detailViewId": "v-u4-physical-fault" },
+          { "name": "Run revised physical soak", "note": "Pending: execute the updated three-agent dedicated-binding harness through disconnect, reconnect, broker restart, and long-duration load.", "state": "current" }
+        ], "src": { "model": "Codex", "transform": "reordered" } },
+        { "type": "comparison", "cols": ["Scenario", "Physical relationship", "Machine-verifiable evidence"], "rows": [
+          ["RW-1", "Agent A/B/C → Profile A/B/C", "Each binding returns only its expected fixture marker"],
+          ["RW-2", "One agent → foreign bindingRef", "Broker returns BINDING_FORBIDDEN before routing"],
+          ["RW-3", "One bound agent + session lease", "Session target must match the same bindingRef"],
+          ["RW-4", "3 agents under parallel dedicated load", "Complete binding, request, command, and result correlation"]
+        ], "src": { "model": "Codex", "transform": "summarized" } },
+        { "type": "comparison", "cols": ["Fault stage", "Who performs it", "Required broker outcome"], "rows": [
+          ["Close/reopen profile B", "User, after U4 instruction", "Only B becomes offline; queued safe work resumes after authentication"],
+          ["Drop one Codex task", "Codex coordinator", "Accepted work survives and remains principal-protected"],
+          ["Restart broker", "Codex coordinator", "Journal recovers, stale leases fence, extensions reauthenticate"],
+          ["30-minute soak", "Codex coordinator", "No wrong target, lost terminal result, leak, or sustained queue/memory growth"]
+        ], "src": { "model": "Codex", "transform": "summarized" } },
+        { "type": "locked", "text": "Trace required for every successful command:\nMCP_ACCEPT(bindingRef) → BINDING_VALIDATED(principal,target) → POLICY_DECISION → COMMAND_COMMIT → WS_SEND → EXT_ACK → EXT_RESULT → MCP_OBSERVED\nDispatch returns a durable receipt; MCP_OBSERVED is the later terminal-result query. Join by runId + bindingRef + requestId + commandId and verify the resolved target against the profile fixture marker.", "src": { "model": "Codex", "transform": "locked" } },
+        { "type": "risk", "items": [
+          { "sev": "danger", "title": "Manual observation becomes the verdict", "text": "The user only prepares physical surfaces. Trace verification, marker matching, and metrics decide PASS or FAIL." },
+          { "sev": "danger", "title": "Secrets copied between tasks", "text": "Provision credentials in protected local configuration and never paste pairing codes, tokens, or private target IDs into chat." },
+          { "sev": "warning", "title": "Setup is incomplete", "text": "Pause with ENVIRONMENT_NOT_READY and a precise U1–U5 action card; do not count it as a product failure." }
+        ], "src": { "model": "Codex", "transform": "summarized" } },
+        { "type": "conclusion", "title": "The deployed routing contract has passed live A/B/C delivery and cross-binding isolation; the revised long-duration physical qualification remains open.", "support": [
+          "Zero wrong-profile fixture markers",
+          "Zero lost terminal results or duplicate non-idempotent actions",
+          "At least 99% completion within deadlines, with every deliberate ambiguity labeled UNKNOWN_OUTCOME"
+        ], "src": { "model": "Codex", "transform": "summarized" } }
+      ]
+    },
+    {
+      "id": "v-u4-physical-fault",
+      "title": "U4 Physical Fault: Isolate Profile B",
+      "blocks": [
+        { "type": "process", "steps": [
+          { "name": "Close profile B", "note": "Done: user closed only the browser profile window assigned to rw-profile-b and showing fixture-B.", "state": "done" },
+          { "name": "Load reconnect fix", "note": "Passed: profiles A and C loaded the persistent-alarm build and reconnected through the native companion.", "state": "done" },
+          { "name": "Observe isolation", "note": "Passed: broker health reports two connected targets; authenticated MCP preflight shows A and C available and only B offline.", "state": "done" },
+          { "name": "Reopen profile B", "note": "Done: user reopened the same profile B without resetting pairing.", "state": "done" },
+          { "name": "Verify recovery", "note": "Passed: after the AdsPower compatibility rebuild, B reauthenticated with its original pairing identity and returned fixture-B through an authenticated MCP snapshot while A and C stayed available.", "state": "done" },
+          { "name": "Restart broker", "note": "Passed: the coordinator cleanly restarted only the broker; all three native companions reauthenticated automatically, authenticated preflight returned A/B/C available, and a post-restart fixture-B command succeeded.", "state": "done" }
+        ], "src": { "model": "Codex", "transform": "reordered" } },
+        { "type": "risk", "items": [
+          { "sev": "danger", "title": "Wrong window", "text": "Do not close all browsers or the broker; close only the profile mapped to rw-profile-b and fixture-B." },
+          { "sev": "warning", "title": "Pairing reset", "text": "Do not remove or reset the extension during this fault; the test requires its existing private identity to reconnect." }
+        ], "src": { "model": "Codex", "transform": "summarized" } },
+        { "type": "conclusion", "title": "This gate passes only if the broker reports an isolated B outage and automatic recovery without disturbing A or C.", "src": { "model": "Codex", "transform": "summarized" } }
+      ]
+    },
+    {
+      "id": "v-u2-task-setup",
+      "title": "U2 Setup: Three Dedicated Codex Agent Tasks",
+      "blocks": [
+        { "type": "process", "steps": [
+          { "name": "Create task A", "note": "Open a new Codex task in the relay workspace and start agent role A.", "state": "current" },
+          { "name": "Create task B", "note": "Open a second independent task in the same workspace and start agent role B.", "state": "todo" },
+          { "name": "Create task C", "note": "Open a third independent task in the same workspace and start agent role C.", "state": "todo" },
+          { "name": "Confirm readiness", "note": "Keep all three commands running until every task says READY, then return to the coordinator.", "state": "todo" }
+        ], "src": { "model": "Codex", "transform": "reordered" } },
+        { "type": "locked", "text": "A: pnpm tsx tests/real-world/agent-role.ts --run-id=<run-id> --role=A\nB: pnpm tsx tests/real-world/agent-role.ts --run-id=<run-id> --role=B\nC: pnpm tsx tests/real-world/agent-role.ts --run-id=<run-id> --role=C", "src": { "model": "Codex", "transform": "locked" } },
+        { "type": "risk", "items": [
+          { "sev": "danger", "title": "Token exposure", "text": "Never open or paste the protected token files; each role process reads only its own local credential." },
+          { "sev": "warning", "title": "Task exits", "text": "Leave every role command running; closing a task removes that independent agent from the real-world test." }
+        ], "src": { "model": "Codex", "transform": "summarized" } },
+        { "type": "conclusion", "title": "U2 passes when three independently authenticated Codex tasks each resolve one unique bindingRef while all three targets remain available.", "src": { "model": "Codex", "transform": "summarized" } }
+      ]
+    },
+    {
+      "id": "v-extension-gateway",
+      "title": "Southbound Gateway: Native Messaging + Authenticated WebSockets",
+      "blocks": [
+        { "type": "process", "steps": [
+          { "name": "Open native port", "note": "Each profile extension starts its own registered native companion process.", "state": "done" },
+          { "name": "Challenge", "note": "The gateway sends a fresh nonce after HELLO.", "state": "done" },
+          { "name": "Authenticate", "note": "The extension signs the nonce with its paired private key.", "state": "current" },
+          { "name": "Bind", "note": "Store private target ID to current live socket in memory.", "state": "current" },
+          { "name": "Route", "note": "Deliver queued commands only to the matching bound socket.", "state": "todo" },
+          { "name": "Reconnect", "note": "Replace stale socket bindings after sleep, restart, or loss.", "state": "todo" }
+        ], "src": { "model": "Codex", "transform": "reordered" } },
+        { "type": "comparison", "cols": ["Deployment", "Extension transport", "Protection"], "rows": [
+          ["Same device MVP", "Native Messaging → companion → ws://127.0.0.1", "Exact extension origin, loopback-only destination, no-proxy socket, signed challenge"],
+          ["Same LAN", "wss:// broker host", "TLS plus device key and origin policy"],
+          ["Remote fleet", "wss:// public gateway", "TLS, device certificates, rate limits"]
+        ], "src": { "model": "Codex", "transform": "summarized" } },
+        { "type": "conclusion", "title": "The gateway owns sockets; the broker owns command semantics, identity policy, and durable state.", "src": { "model": "Codex", "transform": "summarized" } }
+      ]
+    },
+    {
+      "id": "v-native-companion",
+      "title": "Native Companion: One Process per Browser Profile",
+      "blocks": [
+        { "type": "process", "steps": [
+          { "name": "Launch", "note": "Chrome starts a separate native host process for each extension port and profile.", "state": "done" },
+          { "name": "Validate", "note": "Accept only the registered extension origin and only loopback broker URLs.", "state": "done" },
+          { "name": "Bypass profile proxy", "note": "Use the Windows HTTP stack in explicit no-proxy mode for 127.0.0.1, localhost, or ::1.", "state": "done" },
+          { "name": "Bridge", "note": "Frame JSON over Native Messaging and forward the same relay envelopes over WebSocket without changing identity or command semantics.", "state": "done" },
+          { "name": "Disconnect", "note": "Propagate broker close status to the extension and let its reconnect policy create a fresh companion.", "state": "current" }
+        ], "src": { "model": "Codex", "transform": "reordered" } },
+        { "type": "comparison", "cols": ["Layer", "Identifier it sees", "Responsibility"], "rows": [
+          ["Extension", "Its private paired identity", "Sign, execute, ACK, and report"],
+          ["Native companion", "None", "Byte-for-byte JSON transport only"],
+          ["Broker", "Private target ID plus nickname", "Authenticate, bind, schedule, and correlate"]
+        ], "src": { "model": "Codex", "transform": "summarized" } },
+        { "type": "conclusion", "title": "Chrome and AdsPower now use one production transport; the companion bypasses the profile network policy without becoming a second broker.", "src": { "model": "Codex", "transform": "summarized" } }
+      ]
+    },
+    {
+      "id": "v-identity",
+      "title": "Paired Target Inside, Ephemeral Session Binding Outside",
+      "blocks": [
+        { "type": "process", "steps": [
+          { "name": "Generate key", "note": "The extension creates a key pair and stable private identity.", "state": "done" },
+          { "name": "Pair", "note": "A short displayed code confirms the intended local device.", "state": "done" },
+          { "name": "Name", "note": "The user assigns a unique alias such as sales or research.", "state": "current" },
+          { "name": "List availability", "note": "Expose each unique nickname and factual status to authenticated agents without assigning ownership.", "state": "todo", "detailViewId": "v-one-to-one-binding" },
+          { "name": "Issue sessionBindingRef", "note": "When one agent session claims the target, return an opaque reference that expires or can be explicitly released.", "state": "todo" },
+          { "name": "Prove", "note": "Reconnects sign fresh challenges instead of reusing the code.", "state": "todo" }
+        ], "src": { "model": "Codex", "transform": "reordered" } },
+        { "type": "comparison", "cols": ["Identifier", "Agent-visible", "Lifetime"], "rows": [
+          ["sessionBindingRef", "Yes, opaque", "One agent session or lease TTL"], ["Nickname", "Yes, safe selector", "User-managed"], ["Private target ID", "No", "Stable"], ["Socket connection ID", "No", "One connection"]
+        ], "src": { "model": "Codex", "transform": "summarized" } },
+        { "type": "risk", "items": [
+          { "sev": "danger", "title": "Code used as a permanent secret", "text": "A short code is for human confirmation, not long-term authentication." },
+          { "sev": "warning", "title": "sessionBindingRef reused across principals", "text": "Require strong random references and validate principal, client session, state, and expiry on every call." }
+        ], "src": { "model": "Codex", "transform": "summarized" } }
+      ]
+    },
+    {
+      "id": "v-one-to-one-binding",
+      "title": "Dynamic Agent-Session / Extension Binding",
+      "blocks": [
+        { "type": "process", "steps": [
+          { "name": "Pair and nickname extension once", "note": "The extension authenticates to the broker and receives a unique nickname; pairing registers a target but grants no agent permanent ownership.", "state": "done" },
+          { "name": "Authenticate Hermes once", "note": "The MCP bearer credential resolves to a stable broker principal independent of any particular Hermes conversation or browser.", "state": "current" },
+          { "name": "Discover inside the agent session", "note": "The active Hermes session lists nicknames and broker-owned availability facts when browser work begins.", "state": "todo" },
+          { "name": "Acquire ephemeral binding", "note": "The broker atomically reserves the chosen available target and returns sessionBindingRef with expiresAt.", "state": "todo", "detailViewId": "v-call-routing-envelope" },
+          { "name": "Route session calls", "note": "Every target-specific call carries sessionBindingRef; the broker validates principal, session, and TTL before routing.", "state": "todo" },
+          { "name": "Release or expire", "note": "Explicit release, session close, missed heartbeat, or TTL expiry makes the extension available to another session.", "state": "todo" }
+        ], "src": { "model": "Codex", "transform": "reordered" } },
+        { "type": "comparison", "cols": ["Stage", "Agent-to-extension relationship", "Ownership"], "rows": [
+          ["MCP installed", "None", "Broker knows the Hermes principal only"],
+          ["Session acquired", "One expiring sessionBindingRef → one target", "Broker session lease"],
+          ["Released or expired", "None", "Target returns to the available pool"]
+        ], "src": { "model": "Codex", "transform": "summarized" } },
+        { "type": "comparison", "cols": ["Identity concern", "Dedicated-mode rule", "Why"], "rows": [
+          ["Session claim owner", "Broker registry", "One authoritative lease controls contention and recovery"],
+          ["Agent identity", "Authenticated principal plus sessionBindingRef", "An MCP transport is not assumed to equal one conversation"],
+          ["Extension identity", "Private target ID behind a nickname", "Agents never receive raw profile or socket IDs"]
+        ], "src": { "model": "Codex", "transform": "summarized" } },
+        { "type": "comparison", "cols": ["Lifecycle concern", "Dedicated-mode rule", "Why"], "rows": [
+          ["Cardinality", "One active session claim per target by default", "A second session waits, gets busy, or chooses another extension"],
+          ["Offline behavior", "Keep the claim until release or TTL according to policy", "Status remains factual while recovery policy controls lease expiry"],
+          ["Session lifetime", "Renewable TTL plus heartbeat", "Abandoned Hermes sessions cannot hold browsers forever"]
+        ], "src": { "model": "Codex", "transform": "summarized" } },
+        { "type": "locked", "text": "browser_session_bindings { session_binding_id, session_binding_ref, principal_id, target_id, state, acquired_at, expires_at, released_at? }\nUNIQUE active target_id; UNIQUE session_binding_ref\nConnect: { nickname, requestedTtlMs?, idempotencyKey? }\nDispatch: { sessionBindingRef, requestId, operation, parameters, deadlineMs, idempotencyKey }\nBroker validates the active lease, resolves target_id internally, and routes to the target's live socket.", "src": { "model": "Codex", "transform": "locked" } },
+        { "type": "risk", "items": [
+          { "sev": "danger", "title": "Raw extension ID used as sessionBindingRef", "text": "This exposes broker identity and lets callers couple to browser internals; issue a separate opaque capability." },
+          { "sev": "warning", "title": "MCP connection confused with agent session", "text": "A transport can reconnect or be reused, so the broker-issued sessionBindingRef and lease state must be explicit." },
+          { "sev": "warning", "title": "No expiry path", "text": "Require TTL, renew, idempotent release, and cleanup after disconnect or missed heartbeat." }
+        ], "src": { "model": "Codex", "transform": "summarized" } },
+        { "type": "conclusion", "title": "The durable installation identifies Hermes; the ephemeral sessionBindingRef temporarily connects one Hermes session to one selected extension.", "src": { "model": "Codex", "transform": "summarized" } }
+      ]
+    },
+    {
+      "id": "v-call-routing-envelope",
+      "title": "Per-Call Routing Envelope",
+      "blocks": [
+        { "type": "process", "steps": [
+          { "name": "Connect before browser work", "note": "The agent session sends a nickname and receives sessionBindingRef with a finite expiry.", "state": "todo" },
+          { "name": "Build browser call", "note": "The agent attaches sessionBindingRef, a fresh requestId, operation, parameters, deadline, and idempotency key.", "state": "todo" },
+          { "name": "Authenticate and validate lease", "note": "The broker derives principal_id from the credential and requires an ACTIVE, unexpired row matching principal and sessionBindingRef.", "state": "todo" },
+          { "name": "Resolve target", "note": "Only the broker translates the session claim to its private target_id and current extension connection.", "state": "todo" },
+          { "name": "Execute and correlate", "note": "The outcome returns to the originating request while the claim remains available for later calls in the same agent session.", "state": "todo" }
+        ], "src": { "model": "Codex", "transform": "reordered" } },
+        { "type": "comparison", "cols": ["Field", "Purpose", "Visibility"], "rows": [
+          ["sessionBindingRef", "Select and validate one live agent-session claim", "Agent session and broker"],
+          ["principal_id", "Authenticate who is making the call", "Broker only; derived from credential"],
+          ["target_id", "Locate the extension's live connection", "Broker only"]
+        ], "src": { "model": "Codex", "transform": "summarized" } },
+        { "type": "comparison", "cols": ["Field", "Purpose", "Lifetime"], "rows": [
+          ["requestId", "Correlate one command and response", "One call"],
+          ["idempotencyKey", "Prevent duplicate side effects during retry", "One logical operation"],
+          ["sessionBindingRef", "Keep routing stable during one agent session", "Until release or lease expiry"]
+        ], "src": { "model": "Codex", "transform": "summarized" } },
+        { "type": "locked", "text": "MCP browser call\n{ sessionBindingRef, requestId, operation, parameters, deadlineMs, idempotencyKey }\n\nBroker lookup\nSELECT target_id FROM browser_session_bindings\nWHERE session_binding_ref = :sessionBindingRef\n  AND principal_id = :authenticatedPrincipal\n  AND state = 'ACTIVE'\n  AND expires_at > CURRENT_TIMESTAMP;", "src": { "model": "Codex", "transform": "locked" } },
+        { "type": "risk", "items": [
+          { "sev": "danger", "title": "sessionBindingRef trusted without authentication", "text": "Anyone who copies the reference could route commands. Always require the matching authenticated principal and active lease." },
+          { "sev": "warning", "title": "Socket ID used as the reference", "text": "Socket identifiers change on reconnect and make a durable binding unreliable." },
+          { "sev": "warning", "title": "Parent process ID used as the reference", "text": "Process and task identifiers are unstable and are not authorization boundaries." }
+        ], "src": { "model": "Codex", "transform": "summarized" } },
+        { "type": "conclusion", "title": "Use sessionBindingRef on every browser call: it selects a temporary broker lease, not a permanent Hermes-to-extension relationship.", "src": { "model": "Codex", "transform": "summarized" } }
+      ]
+    },
+    {
+      "id": "v-leases",
+      "title": "Many Agents Sharing One Extension",
+      "blocks": [
+        { "type": "process", "steps": [
+          { "name": "Resolve target", "note": "Translate the requested alias and load its access policy.", "state": "done" },
+          { "name": "Classify", "note": "Mark the operation shared-read or exclusive-write.", "state": "done" },
+          { "name": "Check lease", "note": "Find an active owner and remaining lease duration.", "state": "current" },
+          { "name": "Grant or queue", "note": "Grant compatible access or queue by fairness and deadline.", "state": "current" },
+          { "name": "Expire", "note": "Release abandoned ownership after a bounded lease expires.", "state": "todo" }
+        ], "src": { "model": "Codex", "transform": "reordered" } },
+        { "type": "comparison", "cols": ["Mode", "Concurrency", "Typical work"], "rows": [
+          ["Shared read", "Parallel when safe", "Inspect URL or list tabs"], ["Exclusive write", "One agent per profile", "Click, type, submit, navigate"], ["Fan-out", "Parallel across profiles", "Same action on several aliases"]
+        ], "src": { "model": "Codex", "transform": "summarized" } }
+      ]
+    },
+    {
+      "id": "v-command-journal",
+      "title": "Durable Queue and Command State",
+      "blocks": [
+        { "type": "process", "steps": [
+          { "name": "Accepted", "note": "Validate schema, authenticated binding ownership, session, deadline, and operation class.", "state": "done" },
+          { "name": "Queued", "note": "Persist principal, bindingRef, resolved target, requestId, and intent before a socket can receive the command.", "state": "done" },
+          { "name": "Delivered", "note": "Send through the currently authenticated target socket.", "state": "current" },
+          { "name": "Acknowledged", "note": "Record receipt separately from browser action completion.", "state": "current" },
+          { "name": "Terminal", "note": "Commit success, failure, rejection, timeout, or unknown.", "state": "todo" },
+          { "name": "Correlate", "note": "Wake the waiting agent request or publish a result event.", "state": "todo" }
+        ], "src": { "model": "Codex", "transform": "reordered" } },
+        { "type": "comparison", "cols": ["Scale", "Queue implementation", "When"], "rows": [
+          ["One broker process", "Per-target scheduler plus SQLite", "Recommended MVP"], ["HA broker cluster", "PostgreSQL plus outbox and locks", "Moderate scale"], ["Distributed fleet", "NATS JetStream or Redis Streams", "Only for multiple workers"]
+        ], "src": { "model": "Codex", "transform": "summarized" } },
+        { "type": "risk", "items": [
+          { "sev": "danger", "title": "In-memory truth", "text": "Never acknowledge acceptance before durable intent is stored." },
+          { "sev": "danger", "title": "Blind mutation retry", "text": "A disconnect after ACK may require an unknown outcome instead of replay." }
+        ], "src": { "model": "Codex", "transform": "summarized" } }
+      ]
+    },
+    {
+      "id": "v-extension-protocol",
+      "title": "One Extension Node per Chrome Profile",
+      "blocks": [
+        { "type": "process", "steps": [
+          { "name": "Wake", "note": "The extension worker loads identity from extension storage.", "state": "done" },
+          { "name": "Connect", "note": "Open a Native Messaging port; the per-profile companion opens the loopback WebSocket to the gateway.", "state": "done" },
+          { "name": "Authenticate", "note": "Sign the fresh gateway challenge with the paired key.", "state": "current" },
+          { "name": "Receive", "note": "Accept versioned commands for this profile only.", "state": "current" },
+          { "name": "Execute", "note": "Use Chrome APIs or page automation in the local profile.", "state": "todo" },
+          { "name": "Report", "note": "Return ACK, progress, result, and checkpoint metadata.", "state": "todo" },
+          { "name": "Reconnect", "note": "After suspension, repeat authentication and reconcile state.", "state": "todo" }
+        ], "src": { "model": "Codex", "transform": "reordered" } },
+        { "type": "locked", "text": "HELLO → CHALLENGE → AUTH → READY\nCOMMAND → ACK → RUNNING → RESULT\nHEARTBEAT refreshes liveness; reconnect replaces the old socket binding.", "src": { "model": "Codex", "transform": "locked" } },
+        { "type": "risk", "items": [
+          { "sev": "warning", "title": "Worker suspension", "text": "Assume the MV3 worker can pause and lose all in-memory state." },
+          { "sev": "danger", "title": "Unsigned reconnect", "text": "Never let a connection ID alone reclaim a paired target." }
+        ], "src": { "model": "Codex", "transform": "summarized" } }
+      ]
+    },
+    {
+      "id": "v-profile-boundary",
+      "title": "Chrome Profile Is the Isolation Boundary",
+      "blocks": [
+        { "type": "process", "steps": [
+          { "name": "Launch profile", "note": "Chrome starts with its own profile directory and browser state.", "state": "done" },
+          { "name": "Load relay", "note": "The extension instance reads storage scoped to that profile.", "state": "done" },
+          { "name": "Register", "note": "The relay authenticates as exactly one broker target.", "state": "current" },
+          { "name": "Operate", "note": "Commands affect only this profile's tabs and sessions.", "state": "current" },
+          { "name": "Close", "note": "The socket disappears without changing the stable target identity.", "state": "todo" }
+        ], "src": { "model": "Codex", "transform": "reordered" } },
+        { "type": "conclusion", "title": "The extension instance is the connection node; the Chrome profile is the browser-state boundary behind it.", "src": { "model": "Codex", "transform": "summarized" } }
+      ]
+    },
+    {
+      "id": "v-observability",
+      "title": "Observability Without Browser-State Leakage",
+      "blocks": [
+        { "type": "process", "steps": [
+          { "name": "Emit", "note": "Each component emits structured correlation events.", "state": "done" },
+          { "name": "Redact", "note": "Remove credentials, cookies, page content, and raw private IDs.", "state": "done" },
+          { "name": "Measure", "note": "Track socket health, queue depth, latency, and lease contention.", "state": "current" },
+          { "name": "Alert", "note": "Flag repeated auth failures, stuck work, and unknown outcomes.", "state": "current" },
+          { "name": "Trace", "note": "Follow one command ID end to end without exposing profile data.", "state": "todo" }
+        ], "src": { "model": "Codex", "transform": "reordered" } },
+        { "type": "comparison", "cols": ["Signal", "Useful fields", "Excluded data"], "rows": [
+          ["Agent request", "principal, nickname, request ID", "Prompt and credentials"], ["Socket health", "nickname, state, last seen", "Raw socket and private IDs"], ["Command trace", "command ID, state, timings", "Cookies and page body"]
+        ], "src": { "model": "Codex", "transform": "summarized" } }
+      ]
+    }
+  ]
+}

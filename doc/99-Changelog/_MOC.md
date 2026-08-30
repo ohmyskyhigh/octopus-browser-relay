@@ -1,0 +1,30 @@
+# Vault changelog
+
+This directory records applied changes to vault structure and canonical documents. Changelog entries describe changes; they do not override the current canonical owner.
+
+## Entries
+
+- [`2026-08-31-canonical-runtime-release-documentation.md`](./2026-08-31-canonical-runtime-release-documentation.md)
+- [`2026-08-31-canonical-architecture-components-files-and-plan.md`](./2026-08-31-canonical-architecture-components-files-and-plan.md)
+- [`2026-08-28-document-vault-structure.md`](./2026-08-28-document-vault-structure.md)
+- [`2026-08-30-product-definition.md`](./2026-08-30-product-definition.md)
+- [`2026-08-30-workspace-recovery-and-monitoring.md`](./2026-08-30-workspace-recovery-and-monitoring.md)
+- [`2026-08-30-user-experience-definition.md`](./2026-08-30-user-experience-definition.md)
+- [`2026-08-30-user-interface-layer.md`](./2026-08-30-user-interface-layer.md)
+- [`2026-08-30-v1-raw-cdp-direction.md`](./2026-08-30-v1-raw-cdp-direction.md)
+- [`2026-08-30-broker-managed-tab-creation.md`](./2026-08-30-broker-managed-tab-creation.md)
+- [`2026-08-30-raw-cdp-system-proposal.md`](./2026-08-30-raw-cdp-system-proposal.md)
+- [`2026-08-30-extension-backed-cdp-direction.md`](./2026-08-30-extension-backed-cdp-direction.md)
+- [`2026-08-30-extension-profile-identity.md`](./2026-08-30-extension-profile-identity.md)
+- [`2026-08-30-product-definition-coherence-refactor.md`](./2026-08-30-product-definition-coherence-refactor.md)
+- [`2026-08-30-product-constraints-integrated.md`](./2026-08-30-product-constraints-integrated.md)
+- [`2026-08-30-downstream-contract-integration.md`](./2026-08-30-downstream-contract-integration.md)
+- [`2026-08-30-asynchronous-request-tickets.md`](./2026-08-30-asynchronous-request-tickets.md)
+- [`2026-08-30-browser-recovery-and-control-contract.md`](./2026-08-30-browser-recovery-and-control-contract.md)
+- [`2026-08-30-same-tab-ticket-ordering.md`](./2026-08-30-same-tab-ticket-ordering.md)
+- [`2026-08-30-control-priority.md`](./2026-08-30-control-priority.md)
+- [`2026-08-30-full-cycle-lanes-and-takeover-transfer.md`](./2026-08-30-full-cycle-lanes-and-takeover-transfer.md)
+- [`2026-08-30-concurrency-and-orderly-termination.md`](./2026-08-30-concurrency-and-orderly-termination.md)
+- [`2026-08-30-restart-exhaustion-and-endpoint-ownership-fence.md`](./2026-08-30-restart-exhaustion-and-endpoint-ownership-fence.md)
+
+Parent: [`TOP-DOWN-MOC.md`](../TOP-DOWN-MOC.md).

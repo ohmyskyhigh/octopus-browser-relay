@@ -1,26 +1,30 @@
+import {
+  MAX_RELAY_V2_ENVELOPE_BYTES,
+  RELAY_PROTOCOL_V2,
+  createRelayV2Envelope,
+  parseRelayV2Envelope,
+  relayV2PayloadSchemas,
+  type RelayV2Envelope,
+  type RelayV2MessageType,
+  type RelayV2PayloadByType
+} from '../../../../packages/protocol/src/relay/v2-messages.js';
+import { detectBrowserDescriptor } from '../browser/browser-descriptor.js';
+import { BrowserInventory } from '../browser/inventory.js';
+import { TabGroupOperations } from '../browser/tab-groups.js';
 import { loadSettings } from '../config.js';
-import { loadOrCreateIdentity, savePairing, signChallenge } from '../identity/device-identity.js';
-import { executeBrowserCommand, extensionCapabilities } from '../executor/browser-executor.js';
-import { getCachedResult, rememberResult } from '../executor/recent-command-cache.js';
+import { DebuggerAttachmentManager } from '../debugger/attachment-manager.js';
+import { CdpExecutor } from '../debugger/cdp-executor.js';
+import { RecentAttemptCache } from '../executor/recent-command-cache.js';
+import {
+  loadOrCreateIdentity,
+  savePairing,
+  signChallenge,
+  type DeviceIdentity
+} from '../identity/device-identity.js';
+import { RelayDispatcher } from '../protocol/dispatcher.js';
 import { openRelayTransport, type RelayTransport, type RelayTransportClose } from './relay-transport.js';
 
-const PROTOCOL_VERSION = 1;
-
-interface Envelope {
-  protocolVersion: number;
-  messageId: string;
-  sentAt: string;
-  type: string;
-  payload: Record<string, unknown>;
-}
-
-const envelope = (type: string, payload: Record<string, unknown>): Envelope => ({
-  protocolVersion: PROTOCOL_VERSION,
-  messageId: crypto.randomUUID(),
-  sentAt: new Date().toISOString(),
-  type,
-  payload
-});
+const CAPABILITY_MANIFEST_ID = 'octopus-extension-baseline-v1';
 
 const jitter = (max: number): number => {
   const value = new Uint32Array(1);
@@ -28,17 +32,65 @@ const jitter = (max: number): number => {
   return (value[0] ?? 0) % Math.max(1, max);
 };
 
-export class RelayWebSocketClient {
+const serializedBytes = (value: unknown): number =>
+  new TextEncoder().encode(JSON.stringify(value)).byteLength;
+
+const checkedPublicJwk = (value: JsonWebKey): RelayV2PayloadByType['HELLO']['publicKeyJwk'] => {
+  if (typeof value.kty !== 'string' || value.kty.length === 0) {
+    throw new Error('The profile pairing public key is invalid.');
+  }
+  return value as RelayV2PayloadByType['HELLO']['publicKeyJwk'];
+};
+
+export class RelayClient {
   private socket: RelayTransport | null = null;
   private connecting = false;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
   private reconnectAttempt = 0;
-  private connectionEpoch: number | null = null;
-  private targetId: string | null = null;
-  private activeCommandId: string | null = null;
+  private connectionGeneration: number | null = null;
+  private endpointId: string | null = null;
   private stopped = false;
   private lastProtocolError: string | null = null;
+  private negotiatedMaxEnvelopeBytes = MAX_RELAY_V2_ENVELOPE_BYTES;
+
+  private readonly browser = detectBrowserDescriptor();
+  private readonly inventory = new BrowserInventory();
+  private readonly tabGroups = new TabGroupOperations(this.inventory);
+  private readonly attempts = new RecentAttemptCache();
+  private readonly attachments = new DebuggerAttachmentManager(this.inventory);
+  private readonly cdp = new CdpExecutor(this.attachments, this.attempts);
+  private readonly dispatcher = new RelayDispatcher({
+    inventory: this.inventory,
+    tabGroups: this.tabGroups,
+    attachments: this.attachments,
+    cdp: this.cdp,
+    attempts: this.attempts,
+    context: {
+      connectionGeneration: () => this.connectionGeneration,
+      endpointId: () => this.endpointId,
+      browser: this.browser
+    },
+    send: (envelope) => this.sendEnvelope(envelope)
+  });
+  private inventoryPublishTimer: ReturnType<typeof setTimeout> | null = null;
+
+  constructor() {
+    const schedule = (): void => this.scheduleInventoryPublish();
+    chrome.tabs.onCreated.addListener(schedule);
+    chrome.tabs.onUpdated.addListener(schedule);
+    chrome.tabs.onRemoved.addListener(schedule);
+    chrome.tabs.onMoved.addListener(schedule);
+    chrome.tabs.onAttached.addListener(schedule);
+    chrome.tabs.onDetached.addListener(schedule);
+    chrome.windows.onCreated.addListener(schedule);
+    chrome.windows.onRemoved.addListener(schedule);
+    chrome.windows.onFocusChanged.addListener(schedule);
+    chrome.tabGroups.onCreated.addListener(schedule);
+    chrome.tabGroups.onUpdated.addListener(schedule);
+    chrome.tabGroups.onMoved.addListener(schedule);
+    chrome.tabGroups.onRemoved.addListener(schedule);
+  }
 
   async connect(): Promise<void> {
     this.stopped = false;
@@ -48,37 +100,33 @@ export class RelayWebSocketClient {
     try {
       const settings = await loadSettings();
       const identity = await loadOrCreateIdentity();
-      this.targetId = identity.targetId ?? null;
-      const socket = await openRelayTransport(settings.transportMode, settings.brokerUrl);
+      this.endpointId = identity.endpointId ?? null;
+      const transport = await openRelayTransport(settings.transportMode, settings.brokerUrl);
       if (this.stopped) {
-        socket.close(1000, 'Connection cancelled');
+        transport.close(1000, 'Connection cancelled');
         return;
       }
-      this.socket = socket;
-      socket.onMessage((message) => void this.onMessage(socket, message));
-      socket.onClose((event) => this.onClose(socket, event));
-      socket.onError((message) => {
-        if (this.socket !== socket) return;
+      this.socket = transport;
+      transport.onMessage((message) => void this.onMessage(transport, message));
+      transport.onClose((event) => this.onClose(transport, event));
+      transport.onError((message) => {
+        if (this.socket !== transport) return;
         void chrome.storage.local.set({
           connectionStatus: 'error',
           lastError: message,
-          transportKind: socket.kind
+          transportKind: transport.kind
         });
       });
       this.reconnectAttempt = 0;
       this.lastProtocolError = null;
+      this.negotiatedMaxEnvelopeBytes = MAX_RELAY_V2_ENVELOPE_BYTES;
       await chrome.storage.local.set({
         connectionStatus: 'authenticating',
         lastError: null,
-        transportKind: socket.kind
+        transportKind: transport.kind,
+        relayProtocolVersion: RELAY_PROTOCOL_V2
       });
-      socket.send(JSON.stringify(envelope('HELLO', {
-        ...(identity.targetId ? { targetId: identity.targetId } : {}),
-        ...(settings.pairingCode && !identity.targetId ? { pairingCode: settings.pairingCode } : {}),
-        publicKeyJwk: identity.publicKeyJwk,
-        capabilities: [...extensionCapabilities],
-        extensionVersion: chrome.runtime.getManifest().version
-      })));
+      this.sendHello(identity, settings.pairingCode);
     } catch (error) {
       await chrome.storage.local.set({
         connectionStatus: 'error',
@@ -95,88 +143,176 @@ export class RelayWebSocketClient {
     this.stopped = true;
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
     if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
+    if (this.inventoryPublishTimer) clearTimeout(this.inventoryPublishTimer);
     this.socket?.close(1000, 'Extension disconnect');
     this.socket = null;
+    this.connectionGeneration = null;
   }
 
-  private async onMessage(socket: RelayTransport, raw: unknown): Promise<void> {
-    if (this.socket !== socket) return;
-    if (typeof raw !== 'string') return;
-    const message = JSON.parse(raw) as Envelope;
-    if (message.protocolVersion !== PROTOCOL_VERSION || typeof message.type !== 'string') return;
-    const identity = await loadOrCreateIdentity();
-    if (message.type === 'CHALLENGE') {
-      const nonce = String(message.payload.nonce);
-      const connectionEpoch = Number(message.payload.connectionEpoch);
-      if (!identity.targetId) return;
-      const signature = await signChallenge(identity.privateKeyJwk, nonce);
-      this.send('AUTH', { targetId: identity.targetId, signature, connectionEpoch });
-    } else if (message.type === 'PAIRED' || message.type === 'READY') {
-      const targetId = String(message.payload.targetId);
-      const alias = String(message.payload.alias);
-      this.connectionEpoch = Number(message.payload.connectionEpoch);
-      this.targetId = targetId;
-      if (message.type === 'PAIRED') await savePairing(targetId, alias);
-      await chrome.storage.local.set({ connectionStatus: 'connected', targetAlias: alias, connectionEpoch: this.connectionEpoch, lastError: null });
-      this.startHeartbeat();
-    } else if (message.type === 'COMMAND') {
-      await this.execute(message.payload);
-    } else if (message.type === 'ERROR') {
-      this.lastProtocolError = String(message.payload.message ?? message.payload.code);
-      this.stopped = true;
-      await chrome.storage.local.set({ connectionStatus: 'error', lastError: this.lastProtocolError });
-      socket.close(4000, 'Broker rejected handshake');
-    }
+  async resetRuntime(): Promise<void> {
+    this.disconnect();
+    await this.attachments.detachAll();
+    this.endpointId = null;
+    setTimeout(() => void this.connect(), 50);
   }
 
-  private async execute(payload: Record<string, unknown>): Promise<void> {
-    if (!this.connectionEpoch) return;
-    const commandId = String(payload.commandId);
-    this.send('ACK', { commandId, connectionEpoch: this.connectionEpoch });
-    const cached = await getCachedResult(commandId);
-    if (cached) {
-      this.send('RESULT', { commandId, connectionEpoch: this.connectionEpoch, ...cached });
-      return;
-    }
-    this.activeCommandId = commandId;
+  private async onMessage(transport: RelayTransport, raw: unknown): Promise<void> {
+    if (this.socket !== transport || typeof raw !== 'string') return;
     try {
-      if (Date.parse(String(payload.deadlineAt)) <= Date.now()) throw new Error('DEADLINE_EXCEEDED');
-      const output = await executeBrowserCommand(String(payload.operation), payload.parameters);
-      const result = { ok: true, output };
-      await rememberResult(commandId, result);
-      this.send('RESULT', { commandId, connectionEpoch: this.connectionEpoch, ...result });
+      const parsed = JSON.parse(raw) as unknown;
+      const envelope = parseRelayV2Envelope(parsed, this.negotiatedMaxEnvelopeBytes);
+      if (envelope.type === 'CHALLENGE') {
+        await this.onChallenge(envelope as RelayV2Envelope<'CHALLENGE'>);
+      } else if (envelope.type === 'PAIRED') {
+        await this.onPaired(envelope as RelayV2Envelope<'PAIRED'>);
+      } else if (envelope.type === 'READY') {
+        await this.onReady(envelope as RelayV2Envelope<'READY'>);
+      } else if (envelope.type === 'ERROR') {
+        await this.onProtocolError(envelope as RelayV2Envelope<'ERROR'>);
+      } else {
+        await this.dispatcher.dispatch(envelope);
+      }
     } catch (error) {
-      const result = {
-        ok: false,
-        errorCode: error instanceof Error ? error.message : 'EXECUTION_FAILED'
-      };
-      await rememberResult(commandId, result);
-      this.send('RESULT', { commandId, connectionEpoch: this.connectionEpoch, ...result });
-    } finally {
-      this.activeCommandId = null;
+      const message = error instanceof Error ? error.message : 'Invalid relay message.';
+      this.sendEnvelope(createRelayV2Envelope('ERROR', {
+        connectionGeneration: this.connectionGeneration,
+        attemptId: null,
+        code: 'INVALID_RELAY_MESSAGE',
+        message,
+        retryable: false,
+        details: null
+      }));
+    }
+  }
+
+  private async onChallenge(envelope: RelayV2Envelope<'CHALLENGE'>): Promise<void> {
+    const payload = relayV2PayloadSchemas.CHALLENGE.parse(envelope.payload);
+    const identity = await loadOrCreateIdentity();
+    if (!identity.endpointId) {
+      throw new Error('The broker challenged an extension that has not completed pairing.');
+    }
+    this.connectionGeneration = payload.connectionGeneration;
+    this.negotiatedMaxEnvelopeBytes = Math.min(payload.brokerMaxEnvelopeBytes, MAX_RELAY_V2_ENVELOPE_BYTES);
+    const signature = await signChallenge(identity.privateKeyJwk, payload.nonce);
+    this.sendEnvelope(createRelayV2Envelope('AUTH', {
+      endpointId: identity.endpointId,
+      signature,
+      connectionGeneration: payload.connectionGeneration,
+      selectedProtocolVersion: RELAY_PROTOCOL_V2
+    }, this.negotiatedMaxEnvelopeBytes));
+  }
+
+  private async onPaired(envelope: RelayV2Envelope<'PAIRED'>): Promise<void> {
+    const payload = relayV2PayloadSchemas.PAIRED.parse(envelope.payload);
+    await savePairing(payload.endpointId, payload.nickname);
+    this.endpointId = payload.endpointId;
+    this.connectionGeneration = payload.connectionGeneration;
+    await chrome.storage.local.set({
+      connectionStatus: 'authenticating',
+      endpointNickname: payload.nickname,
+      targetAlias: payload.nickname,
+      connectionGeneration: payload.connectionGeneration,
+      capabilityManifestId: payload.selectedCapabilityManifestId,
+      lastError: null
+    });
+    // Pairing establishes identity; a second HELLO proves possession through CHALLENGE/AUTH.
+    this.sendHello(await loadOrCreateIdentity());
+  }
+
+  private async onReady(envelope: RelayV2Envelope<'READY'>): Promise<void> {
+    const payload = relayV2PayloadSchemas.READY.parse(envelope.payload);
+    const identity = await loadOrCreateIdentity();
+    if (identity.endpointId !== payload.endpointId) {
+      throw new Error('The ready endpoint does not match this profile identity.');
+    }
+    this.endpointId = payload.endpointId;
+    this.connectionGeneration = payload.connectionGeneration;
+    await chrome.storage.local.set({
+      connectionStatus: 'connected',
+      endpointNickname: payload.nickname,
+      targetAlias: payload.nickname,
+      connectionGeneration: payload.connectionGeneration,
+      capabilityManifestId: payload.selectedCapabilityManifestId,
+      lastError: null
+    });
+    this.startHeartbeat();
+    const snapshot = await this.dispatcher.initialInventory();
+    this.sendEnvelope(createRelayV2Envelope('INVENTORY_SNAPSHOT', snapshot, this.negotiatedMaxEnvelopeBytes));
+  }
+
+  private async onProtocolError(envelope: RelayV2Envelope<'ERROR'>): Promise<void> {
+    const payload = relayV2PayloadSchemas.ERROR.parse(envelope.payload);
+    this.lastProtocolError = `${payload.code}: ${payload.message}`;
+    await chrome.storage.local.set({ connectionStatus: 'error', lastError: this.lastProtocolError });
+    if (!payload.retryable) {
+      this.stopped = true;
+      this.socket?.close(4000, 'Broker rejected relay session');
     }
   }
 
   private startHeartbeat(): void {
     if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
     const beat = () => {
-      if (this.connectionEpoch && this.targetId) {
-        this.send('HEARTBEAT', { targetId: this.targetId, connectionEpoch: this.connectionEpoch, activeCommandId: this.activeCommandId });
+      if (this.connectionGeneration && this.endpointId) {
+        this.sendEnvelope(createRelayV2Envelope('HEARTBEAT', {
+          endpointId: this.endpointId,
+          connectionGeneration: this.connectionGeneration,
+          inventoryGeneration: this.inventory.currentGeneration(),
+          activeAttemptIds: this.dispatcher.activeAttemptIds().slice(0, 64)
+        }, this.negotiatedMaxEnvelopeBytes));
       }
     };
     beat();
     this.heartbeatTimer = setInterval(beat, 20_000);
   }
 
-  private send(type: string, payload: Record<string, unknown>): void {
-    this.socket?.send(JSON.stringify(envelope(type, payload)));
+  private scheduleInventoryPublish(): void {
+    if (this.connectionGeneration === null || !this.socket) return;
+    if (this.inventoryPublishTimer) clearTimeout(this.inventoryPublishTimer);
+    this.inventoryPublishTimer = setTimeout(() => {
+      this.inventoryPublishTimer = null;
+      void (async () => {
+        if (this.connectionGeneration === null || !this.socket) return;
+        try {
+          const snapshot = await this.dispatcher.initialInventory();
+          this.sendEnvelope(createRelayV2Envelope('INVENTORY_SNAPSHOT', snapshot, this.negotiatedMaxEnvelopeBytes));
+        } catch (error) {
+          await chrome.storage.local.set({
+            lastError: error instanceof Error ? error.message : 'Browser inventory publication failed.'
+          });
+        }
+      })();
+    }, 100);
   }
 
-  private onClose(socket: RelayTransport, event: RelayTransportClose): void {
-    if (this.socket !== socket) return;
+  private sendEnvelope<Type extends RelayV2MessageType>(envelope: RelayV2Envelope<Type>): void {
+    const bytes = serializedBytes(envelope);
+    if (bytes > this.negotiatedMaxEnvelopeBytes) {
+      throw new Error(`Relay envelope is ${bytes} bytes; negotiated maximum is ${this.negotiatedMaxEnvelopeBytes}.`);
+    }
+    if (!this.socket) throw new Error('Relay transport is not connected.');
+    this.socket.send(JSON.stringify(envelope));
+  }
+
+  private sendHello(identity: DeviceIdentity, pairingCode?: string): void {
+    this.sendEnvelope(createRelayV2Envelope('HELLO', {
+      ...(identity.endpointId ? { endpointId: identity.endpointId } : {}),
+      ...(!identity.endpointId && pairingCode ? { pairingCode } : {}),
+      publicKeyJwk: checkedPublicJwk(identity.publicKeyJwk),
+      proposedNickname: identity.proposedNickname,
+      extensionVersion: chrome.runtime.getManifest().version,
+      browser: this.browser,
+      supportedProtocolVersions: [RELAY_PROTOCOL_V2],
+      capabilityManifestIds: [CAPABILITY_MANIFEST_ID],
+      maxEnvelopeBytes: MAX_RELAY_V2_ENVELOPE_BYTES
+    }));
+  }
+
+  private onClose(transport: RelayTransport, event: RelayTransportClose): void {
+    if (this.socket !== transport) return;
     if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
     this.heartbeatTimer = null;
-    this.connectionEpoch = null;
+    this.connectionGeneration = null;
     this.socket = null;
     if (this.lastProtocolError) {
       void chrome.storage.local.set({ connectionStatus: 'error', lastError: this.lastProtocolError });
@@ -198,3 +334,6 @@ export class RelayWebSocketClient {
     this.reconnectTimer = setTimeout(() => void this.connect(), base + jitter(Math.max(1, Math.floor(base / 2))));
   }
 }
+
+// Keep the old class name available while service-worker and downstream imports migrate.
+export { RelayClient as RelayWebSocketClient };

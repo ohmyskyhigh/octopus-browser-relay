@@ -4,8 +4,7 @@ apps/extension/dist/
 .relay-data/
 artifacts/real-world/*
 !artifacts/real-world/.gitignore
-outputs/profile-aware-browser-relay-plan/
-outputs/profile-aware-browser-relay-test/
+outputs/
 work/
 coverage/
 *.log

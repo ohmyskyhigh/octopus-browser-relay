@@ -15,9 +15,20 @@ try {
   }));
   const tools = await client.listTools();
   if (tools.tools.length !== 14) throw new Error(`Expected 14 MCP tools, received ${tools.tools.length}.`);
-  const health = await client.callTool({ name: 'broker_health', arguments: {} });
-  if (health.isError) throw new Error('broker_health returned an error.');
-  console.log(JSON.stringify({ status: 'PASS', tools: tools.tools.length, health: health.structuredContent }, null, 2));
+  const context = await client.callTool({
+    name: 'get_browser_context',
+    arguments: { view: { kind: 'broker' } }
+  });
+  if (context.isError) throw new Error('get_browser_context broker view returned an error.');
+  const structured = context.structuredContent as {
+    disposition?: unknown;
+    facts?: { view_kind?: unknown; broker?: { condition?: unknown } };
+  } | undefined;
+  if (structured?.disposition !== 'complete' || structured.facts?.view_kind !== 'broker'
+    || structured.facts.broker?.condition !== 'ready') {
+    throw new Error(`Broker context is not ready: ${JSON.stringify(structured)}`);
+  }
+  console.log(JSON.stringify({ status: 'PASS', tools: tools.tools.length, brokerContext: structured }, null, 2));
 } finally {
   await client.close();
   await application.stop();

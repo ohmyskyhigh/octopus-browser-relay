@@ -1,0 +1,31 @@
+# System MOC
+
+Authority level: System.
+
+This level owns end-to-end flows, system boundaries, domain and data ownership, cross-component invariants, reliability, recovery, observability, and the internal policies that realize the confirmed Product, User Experience, and User Interface contracts.
+
+Status: confirmed as the implementation baseline and ready for Component decomposition.
+
+## Canonical architecture
+
+### One broker coordinates ticketed extension-backed CDP across many profiles and agents
+
+[`System-Architecture.md`](./System-Architecture.md) defines:
+
+- broker-owned routing, status, request, event, and audit truth;
+- one separately paired extension endpoint per browser profile;
+- public logical windows, workspaces, tabs, requests, and cursors over private browser generations;
+- ten acknowledgement-gated submissions, three immediate reads, and terminal close;
+- exact distinct-endpoint workspace allocation and existing-window selection;
+- versioned managed-tab CDP capability enforcement through `chrome.debugger`;
+- full-cycle per-tab FIFO lanes, scoped controls, ownership epochs, and orderly termination;
+- durable restart, reconnect, cursor, debugger-detach, and human-resolution recovery; and
+- bounded scheduling, retention, logging, and explicit payload failures.
+
+### Real-world evidence may tune implementation parameters without redefining invariants
+
+Worker counts, queue bounds, retention amounts, status thresholds, polling guidance, capability fixtures, and runtime adapters are initial System defaults. Codex, Hermes, Chrome, and AdsPower evidence may revise them through a proposal when public behavior remains compatible.
+
+The accepted historical proposal remains at [`../90-Proposals/System-Architecture.md`](../90-Proposals/System-Architecture.md).
+
+Parent: [`03-User-Interface`](../03-User-Interface/_MOC.md).

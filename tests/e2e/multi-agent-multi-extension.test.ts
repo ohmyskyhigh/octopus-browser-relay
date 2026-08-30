@@ -1,11 +1,18 @@
-import { generateKeyPairSync } from 'node:crypto';
+import { generateKeyPairSync, randomUUID, sign } from 'node:crypto';
 import { afterEach, describe, expect, it } from 'vitest';
 import WebSocket from 'ws';
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
 import { createRelayApplication, type RelayApplication } from '../../apps/broker/src/bootstrap.js';
-import { createRelayEnvelope, parseRelayEnvelope, type RelayEnvelope } from '../../packages/protocol/src/index.js';
+import {
+  MAX_RELAY_V2_ENVELOPE_BYTES,
+  createRelayV2Envelope,
+  parseRelayV2Envelope,
+  type RelayV2Envelope,
+  type RelayV2MessageType,
+  type RelayV2PayloadByType
+} from '../../packages/protocol/src/index.js';
 
-const waitFor = async (condition: () => boolean | Promise<boolean>, timeoutMs = 5_000): Promise<void> => {
+const waitFor = async (condition: () => boolean | Promise<boolean>, timeoutMs = 8_000): Promise<void> => {
   const deadline = Date.now() + timeoutMs;
   while (!(await condition())) {
     if (Date.now() > deadline) throw new Error('Timed out waiting for condition.');
@@ -13,77 +20,272 @@ const waitFor = async (condition: () => boolean | Promise<boolean>, timeoutMs = 
   }
 };
 
-class SimulatedExtension {
-  private socket: WebSocket | null = null;
-  private epoch = 0;
-  readonly executed: string[] = [];
+interface SimulatedTab {
+  tabId: number;
+  groupId: number | null;
+  attached: boolean;
+}
 
-  constructor(readonly marker: string) {}
+class SimulatedV2Extension {
+  private socket: WebSocket | null = null;
+  private endpointId = '';
+  private connectionGeneration = 0;
+  private inventoryGeneration = 1;
+  private nextTabId: number;
+  private readonly tabs = new Map<number, SimulatedTab>();
+  private groupTitle = '';
+  readonly executedCdp: string[] = [];
+
+  constructor(
+    readonly marker: string,
+    private readonly windowId: number,
+    private readonly groupId: number,
+    firstTabId: number
+  ) {
+    this.nextTabId = firstTabId;
+  }
 
   async pair(url: string, pairingCode: string): Promise<void> {
     const keys = generateKeyPairSync('ec', { namedCurve: 'P-256' });
+    const publicKeyJwk = keys.publicKey.export({ format: 'jwk' }) as RelayV2PayloadByType['HELLO']['publicKeyJwk'];
     this.socket = new WebSocket(url);
-    await new Promise<void>((resolve, reject) => { this.socket!.once('open', () => resolve()); this.socket!.once('error', reject); });
-    const paired = this.nextMessage();
-    this.socket.send(JSON.stringify(createRelayEnvelope('HELLO', {
-      publicKeyJwk: keys.publicKey.export({ format: 'jwk' }),
-      pairingCode,
-      capabilities: ['list_tabs', 'get_active_tab', 'snapshot'],
-      extensionVersion: 'test'
-    })));
-    const result = await paired;
-    if (result.type !== 'PAIRED') throw new Error(`Expected PAIRED, got ${result.type}`);
-    this.epoch = Number((result.payload as Record<string, unknown>).connectionEpoch);
-    this.socket.on('message', (data) => this.onMessage(data));
-    this.send('HEARTBEAT', {
-      targetId: String((result.payload as Record<string, unknown>).targetId),
-      connectionEpoch: this.epoch,
-      activeCommandId: null
+    await new Promise<void>((resolve, reject) => {
+      this.socket!.once('open', resolve);
+      this.socket!.once('error', reject);
     });
+
+    const pairedNext = this.nextMessage();
+    this.send('HELLO', {
+      publicKeyJwk,
+      pairingCode,
+      proposedNickname: `fixture-${this.marker}`,
+      extensionVersion: '0.3.0-test',
+      browser: { product: 'Chrome', version: '140.0.0.0', userAgent: null },
+      supportedProtocolVersions: [2],
+      capabilityManifestIds: ['octopus-extension-baseline-v1'],
+      maxEnvelopeBytes: MAX_RELAY_V2_ENVELOPE_BYTES
+    });
+    const paired = await pairedNext as RelayV2Envelope<'PAIRED'>;
+    expect(paired.type).toBe('PAIRED');
+    this.endpointId = paired.payload.endpointId;
+
+    const challengeNext = this.nextMessage();
+    this.send('HELLO', {
+      endpointId: this.endpointId,
+      publicKeyJwk,
+      proposedNickname: `fixture-${this.marker}`,
+      extensionVersion: '0.3.0-test',
+      browser: { product: 'Chrome', version: '140.0.0.0', userAgent: null },
+      supportedProtocolVersions: [2],
+      capabilityManifestIds: ['octopus-extension-baseline-v1'],
+      maxEnvelopeBytes: MAX_RELAY_V2_ENVELOPE_BYTES
+    });
+    const challenge = await challengeNext as RelayV2Envelope<'CHALLENGE'>;
+    this.connectionGeneration = challenge.payload.connectionGeneration;
+    const readyNext = this.nextMessage();
+    this.send('AUTH', {
+      endpointId: this.endpointId,
+      signature: sign('sha256', Buffer.from(challenge.payload.nonce), {
+        key: keys.privateKey,
+        dsaEncoding: 'ieee-p1363'
+      }).toString('base64url'),
+      connectionGeneration: this.connectionGeneration,
+      selectedProtocolVersion: 2
+    });
+    const ready = await readyNext;
+    expect(ready.type).toBe('READY');
+
+    this.socket.on('message', (data) => this.onMessage(data));
+    this.sendInventory(randomUUID());
   }
 
   async close(): Promise<void> {
     if (!this.socket || this.socket.readyState === WebSocket.CLOSED) return;
-    await new Promise<void>((resolve) => { this.socket!.once('close', () => resolve()); this.socket!.close(); });
+    await new Promise<void>((resolve) => {
+      this.socket!.once('close', resolve);
+      this.socket!.close(1000, 'fixture complete');
+    });
   }
 
-  private nextMessage(): Promise<RelayEnvelope> {
+  private nextMessage(): Promise<RelayV2Envelope> {
     return new Promise((resolve, reject) => {
-      const onMessage = (data: WebSocket.RawData) => {
+      const onMessage = (data: WebSocket.RawData): void => {
         cleanup();
-        try { resolve(parseRelayEnvelope(JSON.parse(data.toString()) as unknown)); }
+        try { resolve(parseRelayV2Envelope(JSON.parse(data.toString()) as unknown)); }
         catch (error) { reject(error); }
       };
-      const onClose = () => { cleanup(); reject(new Error('Socket closed.')); };
-      const cleanup = () => { this.socket!.off('message', onMessage); this.socket!.off('close', onClose); };
+      const onClose = (): void => {
+        cleanup();
+        reject(new Error('Socket closed before relay-v2 message.'));
+      };
+      const cleanup = (): void => {
+        this.socket!.off('message', onMessage);
+        this.socket!.off('close', onClose);
+      };
       this.socket!.once('message', onMessage);
       this.socket!.once('close', onClose);
     });
   }
 
   private onMessage(data: WebSocket.RawData): void {
-    const message = parseRelayEnvelope(JSON.parse(data.toString()) as unknown);
-    if (message.type !== 'COMMAND') return;
-    const commandId = String((message.payload as Record<string, unknown>).commandId);
-    this.executed.push(commandId);
-    this.send('ACK', { commandId, connectionEpoch: this.epoch });
-    this.send('RESULT', {
-      commandId,
-      connectionEpoch: this.epoch,
-      ok: true,
-      output: { marker: this.marker, sequence: this.executed.length }
+    const message = parseRelayV2Envelope(JSON.parse(data.toString()) as unknown);
+    if (message.type === 'INVENTORY_REQUEST') {
+      this.sendInventory(message.payload.attemptId);
+      return;
+    }
+    if (message.type === 'CREATE_TAB') {
+      const tabId = this.nextTabId++;
+      this.tabs.set(tabId, { tabId, groupId: message.payload.group?.tabGroupId ?? null, attached: false });
+      this.succeed(message, {
+        tab: {
+          tabId,
+          tabGeneration: 1,
+          windowId: this.windowId,
+          windowGeneration: 1,
+          title: `${this.marker} managed tab`,
+          url: 'about:blank'
+        },
+        group: message.payload.group
+      }, { tabGeneration: 1, groupGeneration: message.payload.group?.groupGeneration ?? null });
+      return;
+    }
+    if (message.type === 'GROUP_TABS') {
+      for (const locator of message.payload.tabs) {
+        const tab = this.tabs.get(locator.tabId);
+        if (tab) tab.groupId = this.groupId;
+      }
+      const group = {
+        tabGroupId: this.groupId,
+        groupGeneration: 1,
+        windowId: this.windowId,
+        windowGeneration: 1
+      };
+      this.succeed(message, { group, tabs: message.payload.tabs }, { groupGeneration: 1 });
+      return;
+    }
+    if (message.type === 'RENAME_GROUP') {
+      this.groupTitle = message.payload.title;
+      this.succeed(message, { group: { ...message.payload.group, title: this.groupTitle } }, { groupGeneration: 1 });
+      return;
+    }
+    if (message.type === 'ATTACH_DEBUGGER') {
+      const tab = this.tabs.get(message.payload.tab.tabId);
+      if (tab) tab.attached = true;
+      this.succeed(message, { attachmentGeneration: 1, protocolVersion: '1.3' }, {
+        tabGeneration: message.payload.tab.tabGeneration,
+        attachmentGeneration: 1
+      });
+      return;
+    }
+    if (message.type === 'SEND_CDP') {
+      this.executedCdp.push(message.payload.method);
+      this.succeed(message, {
+        rawResult: { marker: this.marker, sequence: this.executedCdp.length },
+        sessionId: null
+      }, {
+        tabGeneration: message.payload.tab.tabGeneration,
+        attachmentGeneration: message.payload.expected.attachmentGeneration ?? 1
+      });
+    }
+  }
+
+  private sendInventory(attemptId: string): void {
+    this.send('INVENTORY_SNAPSHOT', {
+      attemptId,
+      connectionGeneration: this.connectionGeneration,
+      inventoryGeneration: this.inventoryGeneration,
+      capturedAt: new Date().toISOString(),
+      browser: { product: 'Chrome', version: '140.0.0.0', userAgent: null },
+      windows: [{
+        windowId: this.windowId,
+        windowGeneration: 1,
+        focused: true,
+        incognito: false,
+        type: 'normal',
+        state: 'normal',
+        groups: this.groupTitle.length === 0 ? [] : [{
+          tabGroupId: this.groupId,
+          groupGeneration: 1,
+          windowId: this.windowId,
+          title: this.groupTitle,
+          color: 'blue',
+          collapsed: false
+        }],
+        tabs: [...this.tabs.values()].map((tab) => ({
+          tabId: tab.tabId,
+          tabGeneration: 1,
+          windowId: this.windowId,
+          groupId: tab.groupId,
+          openerTabId: null,
+          active: true,
+          pinned: false,
+          discarded: false,
+          status: 'complete',
+          url: 'about:blank',
+          title: `${this.marker} managed tab`,
+          debugger: {
+            attached: tab.attached,
+            attachmentGeneration: tab.attached ? 1 : null,
+            protocolVersion: tab.attached ? '1.3' : null
+          }
+        }))
+      }]
     });
   }
 
-  private send(type: Parameters<typeof createRelayEnvelope>[0], payload: Record<string, unknown>): void {
-    this.socket?.send(JSON.stringify(createRelayEnvelope(type, payload)));
+  private succeed<Type extends Exclude<RelayV2MessageType,
+    'HELLO' | 'CHALLENGE' | 'AUTH' | 'PAIRED' | 'READY' | 'HEARTBEAT' | 'INVENTORY_REQUEST'
+    | 'INVENTORY_SNAPSHOT' | 'ACK' | 'OPERATION_RESULT' | 'CDP_EVENT' | 'DEBUGGER_DETACHED' | 'ERROR'>>(
+    message: RelayV2Envelope<Type>,
+    result: NonNullable<RelayV2PayloadByType['OPERATION_RESULT']['result']>,
+    generations: {
+      tabGeneration?: number | null;
+      groupGeneration?: number | null;
+      attachmentGeneration?: number | null;
+    } = {}
+  ): void {
+    this.inventoryGeneration += 1;
+    this.send('ACK', {
+      attemptId: message.payload.attemptId,
+      operation: message.type,
+      expected: message.payload.expected,
+      connectionGeneration: this.connectionGeneration,
+      acceptedAt: new Date().toISOString()
+    });
+    this.send('OPERATION_RESULT', {
+      attemptId: message.payload.attemptId,
+      operation: message.type,
+      expected: message.payload.expected,
+      observed: {
+        connectionGeneration: this.connectionGeneration,
+        inventoryGeneration: this.inventoryGeneration,
+        tabGeneration: generations.tabGeneration ?? null,
+        groupGeneration: generations.groupGeneration ?? null,
+        attachmentGeneration: generations.attachmentGeneration ?? null
+      },
+      outcome: 'succeeded',
+      result,
+      error: null,
+      completedAt: new Date().toISOString()
+    });
+  }
+
+  private send<Type extends RelayV2MessageType>(type: Type, payload: RelayV2PayloadByType[Type]): void {
+    if (!this.socket || this.socket.readyState !== WebSocket.OPEN) throw new Error('Fixture socket is not open.');
+    this.socket.send(JSON.stringify(createRelayV2Envelope(type, payload)));
   }
 }
 
-async function connectAgent(port: number, token: string, name: string): Promise<Client> {
-  const client = new Client({ name, version: '0.1.0' }, { versionNegotiation: { mode: 'auto' } });
+async function connectAgent(port: number, token: string, session: string): Promise<Client> {
+  const client = new Client({ name: session, version: '0.3.0-test' }, { versionNegotiation: { mode: 'auto' } });
   await client.connect(new StreamableHTTPClientTransport(new URL(`http://127.0.0.1:${port}/mcp`), {
-    requestInit: { headers: { Authorization: `Bearer ${token}` } }
+    requestInit: {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'x-octopus-runtime': 'codex',
+        'x-octopus-runtime-session': session
+      }
+    }
   }));
   return client;
 }
@@ -94,19 +296,23 @@ async function call(client: Client, name: string, args: Record<string, unknown>)
   return result.structuredContent as Record<string, unknown>;
 }
 
-async function waitCommand(client: Client, bindingRef: string, commandId: string): Promise<Record<string, unknown>> {
-  let command: Record<string, unknown> = {};
+const ticketRef = (output: Record<string, unknown>): string =>
+  String(((output.facts as { ticket: { request_ref: string } }).ticket).request_ref);
+
+async function waitTicket(client: Client, requestRef: string): Promise<Record<string, unknown>> {
+  let ticket: Record<string, unknown> = {};
   await waitFor(async () => {
-    command = await call(client, 'get_command', { bindingRef, commandId });
-    return ['SUCCEEDED', 'FAILED', 'TIMED_OUT', 'UNKNOWN_OUTCOME'].includes(String(command.state));
+    const response = await call(client, 'get_browser_request', { request_ref: requestRef });
+    ticket = (response.facts as { ticket: Record<string, unknown> }).ticket;
+    return ['succeeded', 'failed', 'cancelled'].includes(String(ticket.state));
   });
-  return command;
+  return ticket;
 }
 
-describe('multi-agent / multi-extension real transport path', () => {
+describe('multi-agent / multi-extension canonical real transport path', () => {
   let app: RelayApplication | null = null;
   const clients: Client[] = [];
-  const extensions: SimulatedExtension[] = [];
+  const extensions: SimulatedV2Extension[] = [];
 
   afterEach(async () => {
     for (const client of clients.splice(0)) await client.close();
@@ -115,51 +321,104 @@ describe('multi-agent / multi-extension real transport path', () => {
     app = null;
   });
 
-  it('routes each agent only through its dedicated bindingRef', async () => {
+  it('isolates three agent sessions while relaying CDP to three designated browser-profile endpoints', async () => {
     const adminToken = 'e2e-admin-token-that-is-long-enough';
     app = createRelayApplication({
-      host: '127.0.0.1', mcpPort: 0, wsPort: 0, dbPath: ':memory:', logLevel: 'silent',
-      heartbeatTimeoutMs: 5_000, errorThreshold: 3, leaseTtlMs: 60_000, adminToken
+      host: '127.0.0.1',
+      mcpPort: 0,
+      wsPort: 0,
+      dbPath: ':memory:',
+      logLevel: 'silent',
+      heartbeatTimeoutMs: 5_000,
+      errorThreshold: 3,
+      leaseTtlMs: 60_000,
+      adminToken
     });
-    const agentRecords = ['a', 'b', 'c'].map((name) => app!.store.createAgent(`agent-${name}`, ['targets:read', 'sessions:write', 'browser:read', 'browser:write']));
+    const agentRecords = ['a', 'b', 'c'].map((name) => app!.store.createAgent(
+      `agent-${name}`,
+      ['targets:read', 'sessions:write', 'browser:read', 'browser:write']
+    ));
     await app.start();
     const mcpPort = app.mcpGateway.address().port;
     const relayPort = app.extensionGateway.address().port;
-    const aliases = ['rw-profile-a', 'rw-profile-b', 'rw-profile-c'];
+    const aliases = ['profile-a', 'profile-b', 'profile-c'];
+    const admin = app.store.authenticateAgent(adminToken)!;
+
     for (const [index, alias] of aliases.entries()) {
-      const pairing = app.broker.createPairingCode(app.store.authenticateAgent(adminToken)!, alias, 60_000);
-      const extension = new SimulatedExtension(`fixture-${String.fromCharCode(65 + index)}`);
+      const pairing = app.legacyBroker.createPairingCode(admin, alias, 60_000);
+      const extension = new SimulatedV2Extension(
+        `fixture-${String.fromCharCode(65 + index)}`,
+        100 + index,
+        200 + index,
+        300 + index * 10
+      );
       extensions.push(extension);
       await extension.pair(`ws://127.0.0.1:${relayPort}/relay`, pairing.pairingCode);
     }
-    const admin = app.store.authenticateAgent(adminToken)!;
-    const bindingRefs = aliases.map((alias, index) => app!.broker.bindAgent(admin, agentRecords[index]!.principal.principalId, alias).bindingRef);
-    for (const [index, record] of agentRecords.entries()) clients.push(await connectAgent(mcpPort, record.token, `agent-${index}`));
+    await waitFor(() => aliases.every((alias) => {
+      const endpoint = app!.store.canonical.logical.getEndpointByNickname(alias);
+      return endpoint !== null && app!.store.canonical.logical.listWindows(endpoint.endpointRef).length === 1;
+    }));
 
-    const advertisedBindings = await Promise.all(clients.map((client) => call(client, 'get_my_binding', {})));
-    expect(advertisedBindings.map((binding) => binding.bindingRef)).toEqual(bindingRefs);
+    for (const [index, record] of agentRecords.entries()) {
+      clients.push(await connectAgent(mcpPort, record.token, `agent-session-${index}`));
+    }
 
-    const oneToOne = await Promise.all(bindingRefs.map((bindingRef, index) => call(clients[index]!, 'dispatch', {
-      bindingRef, operation: 'list_tabs', parameters: {}, idempotencyClass: 'read', deadlineMs: 10_000
-    })));
-    const oneToOneResults = await Promise.all(oneToOne.map((receipt, index) => waitCommand(clients[index]!, bindingRefs[index]!, String(receipt.commandId))));
-    expect(oneToOneResults.map((command) => ((command.result as Record<string, unknown>).output as Record<string, unknown>).marker))
-      .toEqual(['fixture-A', 'fixture-B', 'fixture-C']);
+    const workspaceTickets = await Promise.all(aliases.map((alias, index) => call(
+      clients[index]!,
+      'request_browser_workspace',
+      { required_workspace_count: 1, designated_endpoints: [{ endpoint_nickname: alias }] }
+    )));
+    const workspaceResults = await Promise.all(workspaceTickets.map((accepted, index) =>
+      waitTicket(clients[index]!, ticketRef(accepted))));
+    expect(
+      workspaceResults.map((ticket) => ticket.state),
+      JSON.stringify(workspaceResults, null, 2)
+    ).toEqual(['succeeded', 'succeeded', 'succeeded']);
 
-    await expect(call(clients[0]!, 'dispatch', {
-      bindingRef: bindingRefs[1], operation: 'snapshot', parameters: {}, idempotencyClass: 'read', deadlineMs: 10_000
-    })).rejects.toThrow('BINDING_FORBIDDEN');
+    const assignments = workspaceResults.map((ticket) => {
+      const result = ticket.result as { facts: { resolved: Array<{
+        workspace: { workspace_ref: string };
+        tabs: Array<{ tab_ref: string }>;
+      }> } };
+      return {
+        workspaceRef: result.facts.resolved[0]!.workspace.workspace_ref,
+        tabRef: result.facts.resolved[0]!.tabs[0]!.tab_ref
+      };
+    });
 
-    const mixedReceipts = await Promise.all(Array.from({ length: 12 }, (_, index) => call(clients[index % clients.length]!, 'dispatch', {
-      bindingRef: bindingRefs[index % bindingRefs.length],
-      operation: index % 2 === 0 ? 'list_tabs' : 'get_active_tab',
-      parameters: {},
-      idempotencyClass: 'read',
-      deadlineMs: 10_000,
-      idempotencyKey: `mixed-${index}-unique`
-    })));
-    const mixedResults = await Promise.all(mixedReceipts.map((receipt, index) => waitCommand(clients[index % clients.length]!, bindingRefs[index % bindingRefs.length]!, String(receipt.commandId))));
-    expect(mixedResults.every((command) => command.state === 'SUCCEEDED')).toBe(true);
-    expect(extensions.reduce((total, extension) => total + extension.executed.length, 0)).toBe(3 + 12);
+    const commandReceipts = await Promise.all(assignments.map((assignment, index) => call(
+      clients[index]!,
+      'send_cdp_command',
+      {
+        workspace_ref: assignment.workspaceRef,
+        target: { kind: 'tab', tab_ref: assignment.tabRef },
+        method: 'Runtime.evaluate',
+        params: { expression: `${index} + 1` }
+      }
+    )));
+    const commands = await Promise.all(commandReceipts.map((accepted, index) =>
+      waitTicket(clients[index]!, ticketRef(accepted))));
+    expect(commands.map((ticket) => {
+      const result = ticket.result as { facts: { command: { result: { marker: string } } } };
+      return result.facts.command.result.marker;
+    })).toEqual(['fixture-A', 'fixture-B', 'fixture-C']);
+    expect(extensions.map((extension) => extension.executedCdp)).toEqual([
+      ['Runtime.evaluate'],
+      ['Runtime.evaluate'],
+      ['Runtime.evaluate']
+    ]);
+
+    const crossSession = await call(clients[0]!, 'send_cdp_command', {
+      workspace_ref: assignments[1]!.workspaceRef,
+      target: { kind: 'tab', tab_ref: assignments[1]!.tabRef },
+      method: 'Runtime.evaluate',
+      params: { expression: '42' }
+    });
+    expect(crossSession).toMatchObject({
+      disposition: 'rejected',
+      problem: { code: 'WORKSPACE_NOT_OWNED' }
+    });
+    expect(extensions[1]!.executedCdp).toEqual(['Runtime.evaluate']);
   });
 });

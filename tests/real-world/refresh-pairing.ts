@@ -16,7 +16,7 @@ const runRoot = resolve(workspace, 'artifacts', 'real-world', runId);
 const manifest = RealWorldRunManifestSchema.parse(
   JSON.parse(readFileSync(resolve(runRoot, 'manifest.json'), 'utf8'))
 );
-const outputRoot = resolve(workspace, 'outputs', 'profile-aware-browser-relay-test');
+const outputRoot = resolve(workspace, 'outputs', 'octopus-browser-relay-test');
 const validityMs = 4 * 60 * 60_000;
 const expiresAt = new Date(Date.now() + validityMs).toISOString();
 const store = new SqliteRelayStore(manifest.dbPath);

@@ -9,8 +9,9 @@
   <main>
     <h1>Octopus Browser Relay Settings</h1>
     <p>This extension connects only this Chrome profile to the local broker.</p>
+    <p>Profile nickname: <strong id="profile-nickname">creating…</strong></p>
     <form id="settings-form">
-      <label>Broker WebSocket URL <input id="broker-url" type="url" required value="ws://127.0.0.1:7332/relay"></label>
+      <label>Local broker relay URL <input id="broker-url" type="url" required value="ws://127.0.0.1:7332/relay"></label>
       <label>Transport
         <select id="transport-mode">
           <option value="native">Native companion (recommended)</option>
@@ -20,7 +21,8 @@
       <label>One-time pairing code <input id="pairing-code" autocomplete="off" minlength="8" maxlength="8"></label>
       <button type="submit">Save and connect</button>
     </form>
-    <p>Normal Chrome and AdsPower both use the native companion. Direct WebSocket is retained only for diagnostics.</p>
+    <p>The nickname is generated inside this profile. Pairing rejects a duplicate nickname so every connected profile remains unambiguous.</p>
+    <p>Normal Chrome and AdsPower both use the native companion. Direct WebSocket is retained only for explicit diagnostics.</p>
     <p id="status" role="status"></p>
     <button id="reset" type="button">Reset pairing</button>
   </main>

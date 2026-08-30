@@ -1,7 +1,7 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { mkdirSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
-import Database from 'better-sqlite3';
+import type { SQLInputValue } from 'node:sqlite';
 import type {
   AgentPrincipal,
   BrokerResult,
@@ -11,6 +11,8 @@ import type {
 } from '../../../protocol/src/index.js';
 import type {
   CreateCommandInput,
+  CanonicalRepositories,
+  CanonicalRepositorySet,
   LeaseGrant,
   RelayRepositories,
   ResolvedSession,
@@ -20,6 +22,11 @@ import type {
   StoredTraceEvent,
   StoredTarget
 } from '../repositories.js';
+import { SqliteAuditRepository } from './audit-repository.js';
+import { SqliteEventRepository } from './event-repository.js';
+import { SqliteLogicalRepository } from './logical-repository.js';
+import { SqliteRequestRepository } from './request-repository.js';
+import { NodeSqliteDatabase, type SqliteDatabase } from './runtime.js';
 
 type Row = Record<string, unknown>;
 
@@ -104,22 +111,34 @@ function toCommand(row: Row): StoredCommand {
 }
 
 export class SqliteRelayStore implements RelayRepositories {
-  private readonly db: Database.Database;
+  private readonly db: SqliteDatabase;
+  readonly canonical: CanonicalRepositories;
 
   constructor(databasePath: string) {
     if (databasePath !== ':memory:') mkdirSync(dirname(resolve(databasePath)), { recursive: true });
-    this.db = new Database(databasePath);
+    this.db = new NodeSqliteDatabase(databasePath);
     this.db.pragma('foreign_keys = ON');
     this.db.pragma('journal_mode = WAL');
     this.db.pragma('busy_timeout = 5000');
     this.migrate();
+    const repositories: CanonicalRepositorySet = {
+      logical: new SqliteLogicalRepository(this.db),
+      requests: new SqliteRequestRepository(this.db),
+      events: new SqliteEventRepository(this.db),
+      audit: new SqliteAuditRepository(this.db)
+    };
+    this.canonical = {
+      ...repositories,
+      transaction: <T>(work: (set: CanonicalRepositorySet) => T): T => this.db.transaction(() => work(repositories))()
+    };
   }
 
   private migrate(): void {
     const migrations = [
       { version: 1, sql: readFileSync(new URL('./migrations/001-initial.sql', import.meta.url), 'utf8') },
       { version: 2, sql: readFileSync(new URL('./migrations/002-real-world-trace.sql', import.meta.url), 'utf8') },
-      { version: 3, sql: readFileSync(new URL('./migrations/003-agent-target-bindings.sql', import.meta.url), 'utf8') }
+      { version: 3, sql: readFileSync(new URL('./migrations/003-agent-target-bindings.sql', import.meta.url), 'utf8') },
+      { version: 4, sql: readFileSync(new URL('./migrations/004-workspaces-requests.sql', import.meta.url), 'utf8') }
     ];
     this.db.exec('CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL)');
     for (const migration of migrations) {
@@ -134,6 +153,17 @@ export class SqliteRelayStore implements RelayRepositories {
 
   close(): void {
     this.db.close();
+  }
+
+  sqliteDiagnostics(): { journalMode: string; foreignKeys: boolean; migrationVersion: number } {
+    const journal = this.db.prepare('PRAGMA journal_mode').get() as Row;
+    const foreignKeys = this.db.prepare('PRAGMA foreign_keys').get() as Row;
+    const migration = this.db.prepare('SELECT COALESCE(MAX(version), 0) AS value FROM schema_migrations').get() as Row;
+    return {
+      journalMode: String(journal.journal_mode),
+      foreignKeys: Number(foreignKeys.foreign_keys) === 1,
+      migrationVersion: Number(migration.value)
+    };
   }
 
   createAgent(displayName: string, scopes: string[], token = randomBytes(32).toString('base64url')): { principal: AgentPrincipal; token: string } {
@@ -291,8 +321,8 @@ export class SqliteRelayStore implements RelayRepositories {
   }
 
   revokeBindingsForTarget(targetId: string): number {
-    return this.db.prepare('UPDATE agent_target_bindings SET revoked_at = ? WHERE target_id = ? AND revoked_at IS NULL')
-      .run(nowIso(), targetId).changes;
+    return Number(this.db.prepare('UPDATE agent_target_bindings SET revoked_at = ? WHERE target_id = ? AND revoked_at IS NULL')
+      .run(nowIso(), targetId).changes);
   }
 
   updateTargetObservation(targetId: string, observation: 'heartbeat' | 'success' | 'failure', capabilities?: string[]): StoredTarget {
@@ -366,7 +396,7 @@ export class SqliteRelayStore implements RelayRepositories {
   }
 
   expireLeases(at: string): number {
-    return this.db.prepare('UPDATE leases SET released_at = ? WHERE released_at IS NULL AND expires_at <= ?').run(at, at).changes;
+    return Number(this.db.prepare('UPDATE leases SET released_at = ? WHERE released_at IS NULL AND expires_at <= ?').run(at, at).changes);
   }
 
   createCommand(input: CreateCommandInput): StoredCommand {
@@ -412,7 +442,7 @@ export class SqliteRelayStore implements RelayRepositories {
     return row ? toCommand(row) : null;
   }
 
-  private queryCommand(where: string, params: unknown[]): Row | undefined {
+  private queryCommand(where: string, params: SQLInputValue[]): Row | undefined {
     return this.db.prepare(`SELECT c.*, t.alias AS target_alias, r.state AS result_state, r.output_json, r.error_code
       FROM commands c JOIN targets t ON t.target_id = c.target_id LEFT JOIN results r ON r.command_id = c.command_id ${where}`)
       .get(...params) as Row | undefined;

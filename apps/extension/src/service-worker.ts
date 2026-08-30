@@ -21,7 +21,11 @@ chrome.runtime.onStartup.addListener(() => {
 });
 
 chrome.runtime.onMessage.addListener((message: unknown) => {
-  if (message && typeof message === 'object' && (message as { type?: string }).type === 'relay:reconnect') {
+  if (!message || typeof message !== 'object') return;
+  const type = (message as { type?: string }).type;
+  if (type === 'relay:reset') {
+    void relay.resetRuntime();
+  } else if (type === 'relay:reconnect') {
     relay.disconnect();
     setTimeout(() => void relay.connect(), 50);
   }

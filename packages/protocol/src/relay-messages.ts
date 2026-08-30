@@ -1,5 +1,29 @@
 import { z } from 'zod';
 
+export {
+  MAX_RELAY_V2_ENVELOPE_BYTES,
+  RELAY_PROTOCOL_V2,
+  RELAY_V2_MESSAGE_TYPES,
+  RelayProtocolNegotiationError,
+  RelayV2EnvelopeTooLargeError,
+  RelayV2AttemptIdSchema,
+  RelayV2EndpointIdentitySchema,
+  RelayV2TabGroupInventorySchema,
+  RelayV2TabGroupLocatorSchema,
+  RelayV2TabInventorySchema,
+  RelayV2TabLocatorSchema,
+  RelayV2WindowInventorySchema,
+  RelayV2WindowLocatorSchema,
+  createRelayV2Envelope,
+  negotiateRelayProtocol,
+  parseRelayV2Envelope,
+  relayV2PayloadSchemas,
+  type RelayV2Envelope,
+  type RelayV2MessageType,
+  type RelayV2PayloadByType
+} from './relay/v2-messages.js';
+
+/** @deprecated Relay v1 remains temporarily available for migration tests only. */
 export const RELAY_PROTOCOL_VERSION = 1 as const;
 
 const JwkSchema = z.strictObject({

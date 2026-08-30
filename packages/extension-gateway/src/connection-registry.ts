@@ -2,14 +2,22 @@ import type { WebSocket } from 'ws';
 
 export interface LiveExtensionConnection {
   targetId: string;
+  /** Canonical broker-private endpoint reference. Present on relay-v2 sessions. */
+  endpointRef?: string;
+  /** Extension-private UUID retained for handshake continuity. */
+  endpointId?: string;
+  protocolVersion: 1 | 2;
   epoch: number;
   socket: WebSocket;
   connectedAt: number;
   lastHeartbeatAt: number;
+  inventoryGeneration: number;
+  maxEnvelopeBytes: number;
 }
 
 export class ConnectionRegistry {
-  private readonly current = new Map<string, LiveExtensionConnection>();
+  private readonly currentByTarget = new Map<string, LiveExtensionConnection>();
+  private readonly currentByEndpoint = new Map<string, LiveExtensionConnection>();
   private readonly counters = new Map<string, number>();
 
   nextEpoch(targetId: string): number {
@@ -19,23 +27,41 @@ export class ConnectionRegistry {
   }
 
   bind(connection: LiveExtensionConnection): LiveExtensionConnection | null {
-    const previous = this.current.get(connection.targetId) ?? null;
-    this.current.set(connection.targetId, connection);
+    const previous = connection.endpointRef
+      ? this.currentByEndpoint.get(connection.endpointRef) ?? this.currentByTarget.get(connection.targetId) ?? null
+      : this.currentByTarget.get(connection.targetId) ?? null;
+    this.currentByTarget.set(connection.targetId, connection);
+    if (connection.endpointRef) this.currentByEndpoint.set(connection.endpointRef, connection);
     return previous;
   }
 
   get(targetId: string): LiveExtensionConnection | null {
-    return this.current.get(targetId) ?? null;
+    return this.currentByTarget.get(targetId) ?? null;
+  }
+
+  getEndpoint(endpointRef: string): LiveExtensionConnection | null {
+    return this.currentByEndpoint.get(endpointRef) ?? null;
   }
 
   remove(targetId: string, epoch: number): boolean {
-    const current = this.current.get(targetId);
+    const current = this.currentByTarget.get(targetId);
     if (!current || current.epoch !== epoch) return false;
-    this.current.delete(targetId);
+    this.currentByTarget.delete(targetId);
+    if (current.endpointRef && this.currentByEndpoint.get(current.endpointRef) === current) {
+      this.currentByEndpoint.delete(current.endpointRef);
+    }
+    return true;
+  }
+
+  removeEndpoint(endpointRef: string, epoch: number): boolean {
+    const current = this.currentByEndpoint.get(endpointRef);
+    if (!current || current.epoch !== epoch) return false;
+    this.currentByEndpoint.delete(endpointRef);
+    if (this.currentByTarget.get(current.targetId) === current) this.currentByTarget.delete(current.targetId);
     return true;
   }
 
   values(): LiveExtensionConnection[] {
-    return [...this.current.values()];
+    return [...new Set(this.currentByTarget.values())];
   }
 }

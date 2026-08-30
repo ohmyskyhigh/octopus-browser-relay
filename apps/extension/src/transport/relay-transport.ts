@@ -14,8 +14,18 @@ export interface RelayTransport {
   onError(listener: (message: string) => void): void;
 }
 
-const NATIVE_HOST_NAME = 'com.openai.profile_aware_browser_relay';
+export const NATIVE_HOST_NAME = 'io.github.ohmyskyhigh.octopus_browser_relay';
 const CONNECT_TIMEOUT_MS = 5_000;
+
+function assertLocalRelayUrl(value: string): URL {
+  const url = new URL(value);
+  const hostname = url.hostname.toLowerCase().replace(/^\[|\]$/g, '');
+  if ((url.protocol !== 'ws:' && url.protocol !== 'wss:')
+    || (hostname !== '127.0.0.1' && hostname !== 'localhost' && hostname !== '::1')) {
+    throw new Error('Octopus relay transport only permits local ws:// or wss:// broker URLs.');
+  }
+  return url;
+}
 
 class WebSocketRelayTransport implements RelayTransport {
   readonly kind = 'websocket' as const;
@@ -190,6 +200,7 @@ export async function openRelayTransport(
   mode: 'native' | 'websocket',
   url: string
 ): Promise<RelayTransport> {
-  if (mode === 'websocket') return WebSocketRelayTransport.open(url);
-  return NativeRelayTransport.open(url);
+  const localUrl = assertLocalRelayUrl(url).toString();
+  if (mode === 'websocket') return WebSocketRelayTransport.open(localUrl);
+  return NativeRelayTransport.open(localUrl);
 }
