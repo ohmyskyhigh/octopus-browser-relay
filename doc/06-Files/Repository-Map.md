@@ -110,7 +110,7 @@ The legacy modules do not add MCP tools to the canonical gateway.
 | `apps/broker/src/storage/sqlite/audit-repository.ts` | Canonical append-only audit records | Storage integration tests and broker callers |
 | `apps/broker/src/storage/index.ts` | Exports the SQLite store and repository contracts | Typecheck and component consumers |
 
-### Four immutable migrations build the stored model in application order
+### Five immutable migrations build the stored model in application order
 
 | Path | Current responsibility |
 | --- | --- |
@@ -118,6 +118,7 @@ The legacy modules do not add MCP tools to the canonical gateway.
 | `apps/broker/src/storage/sqlite/migrations/002-real-world-trace.sql` | Earlier real-world trace records |
 | `apps/broker/src/storage/sqlite/migrations/003-agent-target-bindings.sql` | Earlier explicit agent-target bindings |
 | `apps/broker/src/storage/sqlite/migrations/004-workspaces-requests.sql` | Canonical endpoints, generations, capabilities, sessions, lineages, windows, groups, workspaces, tabs, attachments, tickets, lanes, events, controls, and audit state |
+| `apps/broker/src/storage/sqlite/migrations/005-window-focus-history.sql` | Durable per-window focus history used by the most-recently-focused default selection |
 
 Applied migrations are history and are not rewritten when later behavior changes.
 
@@ -217,12 +218,28 @@ The same listener exposes `/relay` for WebSocket upgrades and `/health` for setu
 
 ## Setup and qualification
 
+### Public English and Simplified Chinese entry documents route users without duplicating canonical authority
+
+| Path | Current responsibility | Verification |
+| --- | --- | --- |
+| `README.md` | English project overview, Release and source installation, browser pairing, agent registration, update, verification, limits, and troubleshooting | `tests/contract/public-documentation.test.ts` and physical runbook evidence |
+| `README.zh-CN.md` | Simplified Chinese public project, installation, update, verification, and troubleshooting guide with an explicit English-authority boundary | `tests/contract/public-documentation.test.ts` against the same implementation paths |
+| `doc/zh-CN/README.md` | Chinese documentation index and translation-governance boundary | `tests/contract/public-documentation.test.ts` |
+| `doc/zh-CN/Installation-and-Setup.md` | Chinese GitHub Release, source build, browser extension, Codex, Hermes, update, stop, and troubleshooting procedure | `tests/contract/public-documentation.test.ts`, release rehearsal, and physical runbook evidence |
+| `doc/zh-CN/Architecture-and-MCP.md` | Chinese explanatory map of components, request lifecycle, controls, tools, CDP boundary, and update gate | `tests/contract/public-documentation.test.ts`, canonical English parent links, and contract tests |
+
 ### Build and installation scripts create reproducible local artifacts without editing agent configuration
 
 | Path | Current responsibility | Verification |
 | --- | --- | --- |
 | `tools/build-extension.ts` | Bundles the service worker and options page, then copies the manifest and HTML into `dist/browser-extension` | `pnpm build:extension` and manifest contract test |
 | `tools/build-native-host.ps1` | Locates the Visual Studio x64 tools and builds the WinHTTP companion into `dist/native-host` | `pnpm build:native` and native smoke test |
+| `tools/stage-release.ts` | Bundles portable broker and MCP adapter entries, copies release runtime files plus English/Chinese public guides, checks synchronized versions, and writes the per-file release manifest | `pnpm stage:release` and release-package rehearsal |
+| `tools/package-release.ps1` | Runs verification/build, stages the Windows release, produces the ZIP, archive checksum, and standalone updater asset | `pnpm package:release` and the tag release workflow |
+| `tools/update-local.ps1` | Resolves a GitHub Release or local rehearsal package, verifies archive and file hashes, installs versioned runtime files, preserves data, refreshes stable extension/MCP/native paths, starts and health-checks the broker, and rolls back failed startup | Local update rehearsal and release runbook |
+| `tools/stop-installed-broker.ps1` | Stops only the PID whose command line names the stable installed broker launcher | Local update rehearsal |
+| `tools/installed-broker-launcher.mjs` | Loads the broker entry selected by installed `current-release.json` | Installed broker startup and health check |
+| `tools/installed-mcp-adapter-launcher.mjs` | Loads the MCP adapter entry selected by installed `current-release.json` | Codex/Hermes tool discovery through an installed release |
 | `tools/copy-assets.ts` | Copies SQLite migrations into the compiled `dist` tree | `pnpm build` |
 | `tools/create-pairing-code.ts` | Retains broker-generated short-lived codes only for relay-v1 migration fixtures | `pnpm pair:legacy --nickname <name>` and storage pairing tests |
 | `tools/install-local.ps1` | Builds dependencies/artifacts, verifies the compiled stdio adapter, writes and registers the current-user Native Messaging manifest, generates automatic-pairing and Codex/Hermes stdio handoffs, optionally starts the broker, or runs readiness without `-Install` | `tests/real-world/setup-readiness.ts` and physical runbook |
@@ -251,6 +268,7 @@ The remaining `tests/real-world/*` and `tools/real-world-start.ps1`, `real-world
 | `tests/contract/extension-manifest.test.ts` | Manifest identity, service worker, version, and permissions |
 | `tests/contract/extension-browser-adapter.test.ts` | Browser descriptor, inventory, and tab groups |
 | `tests/contract/cdp-adapter.test.ts` | Debugger attachment, CDP execution, events, detach, and attempt cache |
+| `tests/contract/public-documentation.test.ts` | English/Chinese installation handoff alignment and local Markdown link integrity |
 | `tests/contract/protocol.test.ts` | Retained relay-v1 contract |
 
 ### Unit tests prove state transitions and retained legacy policy helpers
@@ -295,6 +313,7 @@ The E2E extension clients are simulated. Canonical physical acceptance remains t
 | `dist/` | Compiled JavaScript, copied migrations, and native executable |
 | `.relay-data/` | Local token, SQLite database, PID, Native Messaging manifest, and generated registration/pairing handoff |
 | `artifacts/` | Local automated and physical test evidence |
+| `artifacts/release/` | Staged release tree, Windows ZIP, checksum, and standalone updater generated by release packaging |
 
 These paths do not become canonical documentation and must not be committed with local credentials or browser-private evidence.
 

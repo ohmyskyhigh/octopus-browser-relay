@@ -72,7 +72,30 @@ describe('canonical SQLite workspace store', () => {
     const migrated = store.canonical.logical.getEndpointByNickname('legacy-profile');
     expect(migrated?.legacyTargetId).toBe(store.listTargets()[0]?.targetId);
     expect(migrated?.credential).toEqual({});
-    expect(store.sqliteDiagnostics()).toEqual({ journalMode: 'wal', foreignKeys: true, migrationVersion: 4 });
+    expect(store.sqliteDiagnostics()).toEqual({ journalMode: 'wal', foreignKeys: true, migrationVersion: 5 });
+    store.close();
+  });
+
+  it('retains the last focused timestamp after focus moves to another window', () => {
+    const store = new SqliteRelayStore(':memory:');
+    const logical = store.canonical.logical;
+    const endpoint = logical.createEndpoint({ endpointRef: 'ep-focus', nickname: 'focus-profile' });
+    logical.upsertWindow({
+      windowRef: 'win-first', endpointRef: endpoint.endpointRef, privateWindowKey: 'chrome-window-1',
+      locatorGeneration: 1, focused: true, eligible: true, observedAt: '2026-08-31T10:00:00.000Z'
+    });
+    logical.upsertWindow({
+      windowRef: 'win-second', endpointRef: endpoint.endpointRef, privateWindowKey: 'chrome-window-2',
+      locatorGeneration: 1, focused: true, eligible: true, observedAt: '2026-08-31T10:01:00.000Z'
+    });
+    logical.upsertWindow({
+      windowRef: 'win-second', endpointRef: endpoint.endpointRef, privateWindowKey: 'chrome-window-2',
+      locatorGeneration: 2, focused: false, eligible: true, observedAt: '2026-08-31T10:02:00.000Z'
+    });
+
+    expect(logical.getWindow('win-first')).toMatchObject({ focused: false, lastFocusedAt: '2026-08-31T10:00:00.000Z' });
+    expect(logical.getWindow('win-second')).toMatchObject({ focused: false, lastFocusedAt: '2026-08-31T10:01:00.000Z' });
+    expect(logical.listWindows(endpoint.endpointRef).map((window) => window.windowRef)).toEqual(['win-second', 'win-first']);
     store.close();
   });
 

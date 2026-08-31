@@ -3,6 +3,7 @@ dist/
 .relay-data/
 artifacts/real-world/*
 !artifacts/real-world/.gitignore
+artifacts/release/
 outputs/
 work/
 coverage/

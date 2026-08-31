@@ -70,7 +70,8 @@ function toWindow(row: Row): StoredLogicalWindow {
   return {
     windowRef: String(row.window_ref), endpointRef: String(row.endpoint_ref),
     privateWindowKey: String(row.private_window_key), locatorGeneration: Number(row.locator_generation),
-    focused: Boolean(row.focused), eligible: Boolean(row.eligible), lastObservedAt: String(row.last_observed_at),
+    focused: Boolean(row.focused), eligible: Boolean(row.eligible), lastFocusedAt: nullableString(row.last_focused_at),
+    lastObservedAt: String(row.last_observed_at),
     createdAt: String(row.created_at), updatedAt: String(row.updated_at)
   };
 }
@@ -212,11 +213,12 @@ export class SqliteLogicalRepository implements LogicalRepository {
     const at = input.observedAt ?? nowIso();
     return this.db.transaction(() => {
       if (input.focused) this.db.prepare('UPDATE logical_windows SET focused = 0, updated_at = ? WHERE endpoint_ref = ?').run(at, input.endpointRef);
-      this.db.prepare(`INSERT INTO logical_windows(window_ref,endpoint_ref,private_window_key,locator_generation,focused,eligible,last_observed_at,created_at,updated_at)
-        VALUES(?,?,?,?,?,?,?,?,?) ON CONFLICT(window_ref) DO UPDATE SET private_window_key=excluded.private_window_key,
+      this.db.prepare(`INSERT INTO logical_windows(window_ref,endpoint_ref,private_window_key,locator_generation,focused,eligible,last_focused_at,last_observed_at,created_at,updated_at)
+        VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(window_ref) DO UPDATE SET private_window_key=excluded.private_window_key,
         locator_generation=excluded.locator_generation,focused=excluded.focused,eligible=excluded.eligible,
+        last_focused_at=CASE WHEN excluded.focused = 1 THEN excluded.last_observed_at ELSE logical_windows.last_focused_at END,
         last_observed_at=excluded.last_observed_at,updated_at=excluded.updated_at`)
-        .run(input.windowRef, input.endpointRef, input.privateWindowKey, input.locatorGeneration, Number(input.focused), Number(input.eligible), at, at, at);
+        .run(input.windowRef, input.endpointRef, input.privateWindowKey, input.locatorGeneration, Number(input.focused), Number(input.eligible), input.focused ? at : null, at, at, at);
       return toWindow(this.db.prepare('SELECT * FROM logical_windows WHERE window_ref = ?').get(input.windowRef) as Row);
     })();
   }
@@ -227,7 +229,7 @@ export class SqliteLogicalRepository implements LogicalRepository {
   }
 
   listWindows(endpointRef: string): StoredLogicalWindow[] {
-    return (this.db.prepare(`SELECT * FROM logical_windows WHERE endpoint_ref = ? ORDER BY focused DESC,last_observed_at DESC,window_ref`)
+    return (this.db.prepare(`SELECT * FROM logical_windows WHERE endpoint_ref = ? ORDER BY focused DESC,last_focused_at DESC,last_observed_at DESC,window_ref`)
       .all(endpointRef) as Row[]).map(toWindow);
   }
 

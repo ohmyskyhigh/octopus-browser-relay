@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
+import { OCTOPUS_VERSION } from '../../shared/protocol/src/version.js';
 
 const SAFE_RUNTIME_NAME = /^[A-Za-z0-9][A-Za-z0-9._/-]{0,63}$/u;
 const SAFE_SESSION_KEY = /^[A-Za-z0-9][A-Za-z0-9._:@/-]{0,199}$/u;
@@ -121,6 +122,6 @@ export function loadStdioAdapterConfig(
     brokerUrl: readBrokerUrl(environment),
     bearerToken: readBearerToken(environment),
     identity: resolveAdapterIdentity(environment, createRandomId),
-    serviceVersion: valueOf(environment, 'OCTOPUS_ADAPTER_VERSION') ?? '0.3.0'
+    serviceVersion: valueOf(environment, 'OCTOPUS_ADAPTER_VERSION') ?? OCTOPUS_VERSION
   };
 }

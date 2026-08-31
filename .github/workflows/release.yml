@@ -1,0 +1,44 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  windows-release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Enable the repository pnpm version
+        shell: pwsh
+        run: |
+          corepack enable
+          corepack prepare pnpm@11.19.0 --activate
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Require the tag and package versions to match
+        shell: pwsh
+        run: |
+          $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          if ($env:GITHUB_REF_NAME -ne "v$version") {
+            throw "Tag $env:GITHUB_REF_NAME does not match package version v$version."
+          }
+      - name: Verify source and build artifacts
+        run: pnpm verify
+      - name: Package the portable Windows release
+        shell: pwsh
+        run: pwsh -NoProfile -File tools/package-release.ps1 -SkipVerify
+      - name: Publish immutable release assets
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $assets = Get-ChildItem artifacts/release/*.zip, artifacts/release/*.sha256, artifacts/release/octopus-browser-relay-update.ps1 | ForEach-Object FullName
+          gh release create $env:GITHUB_REF_NAME @assets --generate-notes --verify-tag

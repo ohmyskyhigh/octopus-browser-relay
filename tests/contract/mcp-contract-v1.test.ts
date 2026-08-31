@@ -155,6 +155,24 @@ describe('canonical MCP contract version 1', () => {
     }
   });
 
+  it('publishes and enforces the broker pagination range', () => {
+    expect(safeParseMcpToolInput('get_browser_context', {
+      view: { kind: 'endpoints', conditions: [], page_size: 100, cursor: null }
+    })).toMatchObject({ success: true });
+    expect(safeParseMcpToolInput('get_browser_context', {
+      view: { kind: 'endpoints', conditions: [], page_size: 101, cursor: null }
+    }).success).toBe(false);
+
+    expect(safeParseMcpToolInput('read_cdp_events', {
+      ...validInputs.read_cdp_events as object,
+      page_size: 100
+    })).toMatchObject({ success: true });
+    expect(safeParseMcpToolInput('read_cdp_events', {
+      ...validInputs.read_cdp_events as object,
+      page_size: 101
+    }).success).toBe(false);
+  });
+
   it('keeps all public inputs closed and rejects model-authored routing identifiers', () => {
     const forbiddenFields = ['runId', 'idempotencyKey', 'principalId', 'tabId'];
     for (const name of MCP_TOOL_NAMES) {

@@ -126,7 +126,7 @@ It never implements a distributed lock across MCP and extension transports. Dura
 
 The initial implementation uses one local SQLite database in WAL mode. Repositories expose typed transaction methods rather than arbitrary SQL to Broker Core.
 
-The store owns schema migration and persistence for endpoints, pairing credentials, sessions and lineages, windows, workspaces, managed tabs, requests, request attempts, lane positions, control epochs, event streams, event pages, capability selections, status observations, public closure, and audit records.
+The store owns schema migration and persistence for endpoints, pairing credentials, sessions and lineages, windows and their last-focus observations, workspaces, managed tabs, requests, request attempts, lane positions, control epochs, event streams, event pages, capability selections, status observations, public closure, and audit records.
 
 ### Separate tables preserve logical state, current locators, and append-only evidence
 
@@ -208,6 +208,12 @@ The manifest describes scope and support; Browser Extension executes. Broker Cor
 Setup scripts build artifacts, register the native host, register MCP configuration for Codex and Hermes, print extension load paths, verify broker health, and explain automatic extension pairing. They do not issue or ask the human to enter a pairing code. Re-running them repairs matching configuration without deleting pairing or workspace state unless reset is explicitly requested.
 
 Runtime-specific templates remain separate from agent-visible MCP schemas.
+
+### Release tooling owns package integrity while the gateway and extension own reload fencing
+
+Setup and Qualification bundles portable broker and MCP adapter entries, builds the versioned native executable and unpacked extension, generates the per-file release manifest, publishes the archive checksum, and performs verified staged installation. It owns download, checksum and manifest validation, versioned release directories, stable launchers, Native Messaging registration, health confirmation, and rollback of a failed startup.
+
+Extension Gateway compares the connected extension version with the broker's required version and withholds Broker Core readiness when reload is required. Browser Extension owns the one-reload decision and repeated-mismatch guard. Neither component changes profile identity, pairing, workspace truth, or request truth during an update.
 
 ### Automated tests progress from pure invariants to real browsers
 

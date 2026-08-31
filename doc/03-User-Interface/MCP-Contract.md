@@ -123,7 +123,7 @@ The endpoint-control ticket remains requester-scoped through terminal closure, i
 
 ### Page limits are advertised and invalid requests fail explicitly
 
-Every paginated view and event read validates its caller-supplied `page_size` against the broker's advertised current limit. Cursors bind the query, ordering snapshot, caller visibility, and relevant owner or connection generation.
+Every paginated view and event read accepts `page_size` from 1 through 100, as advertised by the tool schema and enforced by the broker. Cursors bind the query, ordering snapshot, caller visibility, and relevant owner or connection generation.
 
 Changing a query or crossing an authority, stream, or connection generation invalidates the cursor rather than silently continuing a different collection.
 

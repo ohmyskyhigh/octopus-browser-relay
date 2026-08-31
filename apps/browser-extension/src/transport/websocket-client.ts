@@ -23,6 +23,7 @@ import {
   type DeviceIdentity
 } from '../identity/device-identity.js';
 import { RelayDispatcher } from '../protocol/dispatcher.js';
+import { decideExtensionReload, normalizeLegacyReadyEnvelope } from '../update/extension-update.js';
 import { openRelayTransport, type RelayTransport, type RelayTransportClose } from './relay-transport.js';
 
 const CAPABILITY_MANIFEST_ID = 'octopus-extension-baseline-v1';
@@ -161,7 +162,8 @@ export class RelayClient {
     if (this.socket !== transport || typeof raw !== 'string') return;
     try {
       const parsed = JSON.parse(raw) as unknown;
-      const envelope = parseRelayV2Envelope(parsed, this.negotiatedMaxEnvelopeBytes);
+      const compatible = normalizeLegacyReadyEnvelope(parsed, chrome.runtime.getManifest().version);
+      const envelope = parseRelayV2Envelope(compatible, this.negotiatedMaxEnvelopeBytes);
       if (envelope.type === 'CHALLENGE') {
         await this.onChallenge(envelope as RelayV2Envelope<'CHALLENGE'>);
       } else if (envelope.type === 'PAIRED') {
@@ -226,6 +228,42 @@ export class RelayClient {
     if (identity.endpointId !== payload.endpointId) {
       throw new Error('The ready endpoint does not match this profile identity.');
     }
+    const currentVersion = chrome.runtime.getManifest().version;
+    const reloadState = await chrome.storage.local.get('extensionReloadAttemptedForVersion');
+    const attemptedVersion = typeof reloadState.extensionReloadAttemptedForVersion === 'string'
+      ? reloadState.extensionReloadAttemptedForVersion
+      : null;
+    const reloadDecision = decideExtensionReload({
+      currentVersion,
+      requiredVersion: payload.requiredExtensionVersion,
+      reloadRequested: payload.reloadExtension,
+      attemptedVersion
+    });
+    if (reloadDecision.kind === 'reload') {
+      await chrome.storage.local.set({
+        connectionStatus: 'updating',
+        brokerVersion: payload.brokerVersion,
+        requiredExtensionVersion: reloadDecision.requiredVersion,
+        extensionReloadAttemptedForVersion: reloadDecision.requiredVersion,
+        lastError: null
+      });
+      this.disconnect();
+      setTimeout(() => chrome.runtime.reload(), 50);
+      return;
+    }
+    if (reloadDecision.kind === 'blocked') {
+      this.lastProtocolError = reloadDecision.message;
+      await chrome.storage.local.set({
+        connectionStatus: 'error',
+        brokerVersion: payload.brokerVersion,
+        requiredExtensionVersion: payload.requiredExtensionVersion,
+        lastError: reloadDecision.message
+      });
+      this.stopped = true;
+      this.socket?.close(4000, 'Extension update requires operator action');
+      return;
+    }
+    await chrome.storage.local.remove('extensionReloadAttemptedForVersion');
     this.endpointId = payload.endpointId;
     this.connectionGeneration = payload.connectionGeneration;
     await chrome.storage.local.set({
@@ -234,6 +272,8 @@ export class RelayClient {
       targetAlias: payload.nickname,
       connectionGeneration: payload.connectionGeneration,
       capabilityManifestId: payload.selectedCapabilityManifestId,
+      brokerVersion: payload.brokerVersion,
+      requiredExtensionVersion: payload.requiredExtensionVersion,
       lastError: null
     });
     this.startHeartbeat();

@@ -1,11 +1,27 @@
 # Octopus Browser Relay
 
+[English](./README.md) | [简体中文](./README.zh-CN.md) | [中文文档](./doc/zh-CN/README.md)
+
 Give AI-agent sessions brokered, profile-aware access to multiple local Chrome or AdsPower browsers through MCP.
 
 Octopus Browser Relay connects a local MCP gateway to one extension instance in each browser profile. An agent asks for browser capacity, receives broker-issued workspace and tab references, submits extension-supported Chrome DevTools Protocol (CDP) commands, and polls durable request tickets. The extension relays those commands through `chrome.debugger`; Chrome does not need a public remote-debugging port.
 
 > [!IMPORTANT]
 > Version `0.3.0` is a development release. The canonical fourteen-tool runtime, relay-v2 protocol, Native Messaging path, and extension-backed CDP adapter are implemented in this repository. Automated verification and physical Chrome, AdsPower, Codex, and Hermes qualification are separate gates; see [Current limits](#current-limits) and the [real-world runbook](./doc/06-Files/Real-World-Runbook.md).
+
+## Quick start
+
+### The GitHub Release updater is the shortest supported installation path
+
+1. Install Node.js `22.12.0` or newer on Windows.
+2. Download and run the standalone updater shown under [GitHub Releases](#github-releases-provide-verified-installation-and-updates).
+3. Keep the updater's final JSON output. Require `status: UPDATED`, `broker.health.status: ok`, and `broker.health.serviceVersion: 0.3.0`.
+4. Open `chrome://extensions` in each intended Chrome or AdsPower profile, enable **Developer mode**, choose **Load unpacked**, and select the returned `extensionPath`.
+5. Open **Octopus Browser Relay Settings** in each profile and wait for `Status: connected`. No pairing code needs to be entered; each extension registers automatically with its generated two-word code and compact nickname.
+6. Open `%LOCALAPPDATA%\Octopus Browser Relay\bootstrap\INSTALLATION.md`. Merge `codex-mcp.toml` into Codex or run the command in `hermes-mcp.txt`, then start a new agent session.
+7. Check `http://127.0.0.1:7331/health`. `connectedEndpoints` must equal the number of browser profiles intended for the test.
+
+Use the source-checkout installer only when developing or rebuilding the project. The complete English procedure is below; the focused Simplified Chinese procedure is in [安装与设置](./doc/zh-CN/Installation-and-Setup.md).
 
 ## What agents can do
 
@@ -87,6 +103,42 @@ pwsh -NoProfile -File .\tools\real-world-preflight.ps1
 ```
 
 The check verifies the workspace, built extension files, required manifest declarations, native executable, compiled stdio adapter, Native Messaging manifest, every configured Native Messaging registry value, generated pairing and MCP handoff files, and both health endpoints. It exits with code `10` when operator action is still required. Pass the same `-NativeRegistryRoots` values to installation and preflight when a browser build uses different roots.
+
+### GitHub Releases provide verified installation and updates
+
+The release workflow publishes a portable Windows ZIP, its SHA-256 checksum, and a standalone updater. For the first release installation, download and run the updater:
+
+```powershell
+Invoke-WebRequest `
+  https://github.com/ohmyskyhigh/octopus-browser-relay/releases/latest/download/octopus-browser-relay-update.ps1 `
+  -OutFile .\octopus-browser-relay-update.ps1
+pwsh -NoProfile -File .\octopus-browser-relay-update.ps1
+```
+
+The updater installs under `%LOCALAPPDATA%\Octopus Browser Relay`, preserves durable data under its `data` directory, registers the versioned native host, starts the broker, and prints the stable extension directory. It also writes these handoff files under `%LOCALAPPDATA%\Octopus Browser Relay\bootstrap`:
+
+```text
+INSTALLATION.md
+codex-mcp.toml
+hermes-mcp.txt
+current-release.json
+```
+
+Open `chrome://extensions`, enable developer mode, choose **Load unpacked**, and select the returned extension directory once. Do not select the downloaded ZIP itself; the updater extracts and maintains the stable extension directory.
+
+For later updates, run the installed updater:
+
+```powershell
+pwsh -NoProfile -File "$env:LOCALAPPDATA\Octopus Browser Relay\update-local.ps1"
+```
+
+Later updates keep the unpacked-extension path unchanged. After the updated broker starts, an older connected extension reloads once and reconnects with its existing pairing identity. If the files still do not match after that reload, the extension reports an update error instead of looping.
+
+Maintainers build the assets with:
+
+```powershell
+pnpm package:release
+```
 
 ### The stop command refuses to terminate an unrelated process
 
@@ -216,6 +268,32 @@ pnpm build
 
 `pnpm verify` runs those checks as one gate. `pnpm build` also compiles the Windows native companion and therefore needs the C++ toolchain. Use the [real-world runbook](./doc/06-Files/Real-World-Runbook.md) for physical profiles and agent runtimes.
 
+## Troubleshooting
+
+### A disconnected extension is diagnosed from the native host toward the broker
+
+1. Confirm `http://127.0.0.1:7332/health` responds.
+2. Confirm the extension ID is `caekiojlchhifdomfghejkbfpmaklafe` and **Native companion** is selected.
+3. Confirm the extension directory still exists at the path reported by the updater.
+4. Open `%LOCALAPPDATA%\Octopus Browser Relay\bootstrap\INSTALLATION.md` and verify the installed paths.
+5. Reload the unpacked extension once. If it still reports a version mismatch, run the installed updater again; do not repeatedly reload it.
+
+For a source checkout, run `pwsh -NoProfile -File .\tools\real-world-preflight.ps1`. For a GitHub Release install, check both health endpoints and the generated handoff files directly.
+
+### An agent that cannot see fourteen tools needs a fresh stdio adapter process
+
+Confirm the broker health first. Then verify that the Codex or Hermes registration points to the generated stable adapter launcher and token-file path. Restart the agent session after changing its MCP registration. Hermes can check the registration with:
+
+```powershell
+hermes mcp test octopus-browser-relay
+```
+
+Exactly fourteen tools must be discovered. Do not point an agent at the relay WebSocket port; agents use the stdio adapter and HTTP MCP gateway.
+
+### A broker port conflict must be resolved without killing an unrelated process
+
+The default ports are `7331` and `7332`. Use the installed `stop-installed-broker.ps1` or the source checkout's `tools/stop-local-broker.ps1`; both verify the recorded process command before stopping it. If another application owns a port, stop that application deliberately or select different MCP and relay ports during installation.
+
 ## Current limits
 
 - The Native Messaging host and registration installer are Windows-specific.
@@ -226,7 +304,7 @@ pnpm build
 - The extension executes only methods published by `octopus-extension-baseline-v1`; flattened child CDP sessions are disabled.
 - Relay-v2 extension envelopes are limited to 1 MiB. Capability and inventory limits are published in the same manifest.
 - The relay-v1 compatibility bridge remains enabled for migration, while the public MCP gateway exposes only the canonical fourteen tools.
-- The repository does not install Codex, Hermes, Chrome, or AdsPower, and it has not yet recorded the final cross-runtime, multi-profile physical qualification for this release.
+- The repository does not install Codex, Hermes, Chrome, or AdsPower. The current release has recorded a three-profile, independent-Codex-session, and Hermes physical qualification; another machine or browser build still requires its own preflight and physical evidence.
 - There is a PID-verified broker stop command but no full uninstall command yet.
 
 ## Repository layout

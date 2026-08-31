@@ -820,7 +820,7 @@ export class OctopusBroker implements ExtensionEventSink {
       const window = typeof rawSelection.window_ref === 'string'
         ? this.repositories.logical.getWindow(rawSelection.window_ref)
         : this.mostRecentWindow(endpoint.endpointRef);
-      if (!window) throw new OctopusBrokerError(problem('WINDOW_UNAVAILABLE', `Endpoint ${nickname} has no eligible existing window.`, true, { endpoint_nickname: nickname }));
+      if (!window) throw new OctopusBrokerError(problem('WINDOW_UNAVAILABLE', `Endpoint ${nickname} has no unambiguous most-recently-focused eligible window; discover its windows and supply window_ref.`, true, { endpoint_nickname: nickname }));
       const created = await this.createWorkspaceInWindow(ticket, endpoint, window, resolved.length + 1);
       resolved.push({
         endpoint_nickname: nickname,
@@ -2217,9 +2217,11 @@ export class OctopusBroker implements ExtensionEventSink {
   }
 
   private mostRecentWindow(endpointRef: string): StoredLogicalWindow | null {
-    return this.repositories.logical.listWindows(endpointRef)
-      .filter((window) => window.eligible)
-      .sort((left, right) => Number(right.focused) - Number(left.focused) || right.lastObservedAt.localeCompare(left.lastObservedAt))[0] ?? null;
+    const eligible = this.repositories.logical.listWindows(endpointRef).filter((window) => window.eligible);
+    if (eligible.length === 1) return eligible[0] ?? null;
+    return eligible
+      .filter((window) => window.lastFocusedAt !== null)
+      .sort((left, right) => right.lastFocusedAt!.localeCompare(left.lastFocusedAt!))[0] ?? null;
   }
 
   private createEventStream(tab: StoredManagedTab, workspace: StoredWorkspace): void {
@@ -2283,7 +2285,7 @@ export class OctopusBroker implements ExtensionEventSink {
       endpoint_nickname: endpoint?.nickname ?? 'unknown-endpoint',
       eligible_for_workspace: window.eligible,
       eligibility_reason: window.eligible ? null : 'window_not_eligible',
-      last_focused_at: window.focused ? window.lastObservedAt : null,
+      last_focused_at: window.lastFocusedAt,
       observed_at: window.lastObservedAt
     };
   }

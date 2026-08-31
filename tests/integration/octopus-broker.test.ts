@@ -33,6 +33,9 @@ class FakeExtensionPort implements OctopusExtensionPort {
   private readonly groups = new Map<string, Map<number, { tabGroupId: number; groupGeneration: number; windowId: number; title: string }>>();
   private readonly inventoryGenerations = new Map<string, number>();
   private readonly attemptOutcomes = new Map<string, NonNullable<RelayV2PayloadByType['OPERATION_RESULT']['result']>>();
+  private inventoryWindows: Array<{ windowId: number; windowGeneration: number; focused: boolean }> = [
+    { windowId: 1, windowGeneration: 1, focused: true }
+  ];
 
   failNextTabCreations(count: number): void { this.createFailuresRemaining = count; }
   failNextTabCreationsOn(endpointRef: string, count: number): void { this.endpointCreateFailures.set(endpointRef, count); }
@@ -44,6 +47,9 @@ class FakeExtensionPort implements OctopusExtensionPort {
   }
   reconnect(endpointRef: string, connectionGeneration: number): void {
     this.connections.set(endpointRef, { connectionGeneration, connected: true });
+  }
+  setInventoryWindows(windows: Array<{ windowId: number; windowGeneration: number; focused: boolean }>): void {
+    this.inventoryWindows = windows;
   }
 
   setEventSink(sink: ExtensionEventSink): void { this.sink = sink; }
@@ -76,11 +82,11 @@ class FakeExtensionPort implements OctopusExtensionPort {
       inventoryGeneration: this.inventoryGenerations.get(endpointRef) ?? 1,
       capturedAt: new Date().toISOString(),
       browser: { product: 'Chrome', version: '140', userAgent: null },
-      windows: [{
-        windowId: 1, windowGeneration: 1, focused: true, incognito: false, type: 'normal' as const,
+      windows: this.inventoryWindows.map((window) => ({
+        ...window, incognito: false, type: 'normal' as const,
         state: 'normal' as const,
-        groups: groups.map((group) => ({ ...group, color: 'blue' as const, collapsed: false })),
-        tabs: tabs.map((tab) => ({
+        groups: groups.filter((group) => group.windowId === window.windowId).map((group) => ({ ...group, color: 'blue' as const, collapsed: false })),
+        tabs: tabs.filter((tab) => tab.windowId === window.windowId).map((tab) => ({
           ...tab,
           openerTabId: null,
           active: true,
@@ -89,7 +95,7 @@ class FakeExtensionPort implements OctopusExtensionPort {
           status: 'complete' as const,
           debugger: { attached: false, attachmentGeneration: null, protocolVersion: null }
         }))
-      }]
+      }))
     };
   }
 
@@ -272,6 +278,55 @@ describe('canonical Octopus broker', () => {
     const commandTicket = await eventually(() => broker.getBrowserRequest({ request_ref: commandRef }, caller));
     parseMcpToolOutput('get_browser_request', commandTicket);
     expect((commandTicket.facts as { ticket: { state: string } }).ticket.state).toBe('succeeded');
+  });
+
+  it('requires an explicit window until a multi-window endpoint has durable focus history', async () => {
+    extension.setInventoryWindows([
+      { windowId: 1, windowGeneration: 1, focused: false },
+      { windowId: 2, windowGeneration: 1, focused: false }
+    ]);
+    const ambiguous = broker.submit('request_browser_workspace', {
+      required_workspace_count: 1,
+      designated_endpoints: [{ endpoint_nickname: 'profile-a' }]
+    }, caller);
+    const ambiguousRef = (ambiguous.facts as { ticket: { request_ref: string } }).ticket.request_ref;
+    broker.confirmAcknowledgement(ambiguousRef, true);
+    const failed = await eventually(() => broker.getBrowserRequest({ request_ref: ambiguousRef }, caller));
+    expect(failed).toMatchObject({
+      facts: { ticket: { state: 'failed', failure: { problem: { code: 'WINDOW_UNAVAILABLE' } } } }
+    });
+    expect(extension.createTabCallCount()).toBe(0);
+
+    extension.setInventoryWindows([
+      { windowId: 1, windowGeneration: 1, focused: true },
+      { windowId: 2, windowGeneration: 1, focused: false }
+    ]);
+    const focused = broker.submit('request_browser_workspace', {
+      required_workspace_count: 1,
+      designated_endpoints: [{ endpoint_nickname: 'profile-a' }]
+    }, caller);
+    const focusedRef = (focused.facts as { ticket: { request_ref: string } }).ticket.request_ref;
+    broker.confirmAcknowledgement(focusedRef, true);
+    const focusedTicket = await eventually(() => broker.getBrowserRequest({ request_ref: focusedRef }, caller));
+    const focusedWindowRef = (focusedTicket.facts as {
+      ticket: { result: { facts: { resolved: Array<{ workspace: { window_ref: string } }> } } }
+    }).ticket.result.facts.resolved[0]!.workspace.window_ref;
+
+    extension.setInventoryWindows([
+      { windowId: 1, windowGeneration: 1, focused: false },
+      { windowId: 2, windowGeneration: 1, focused: false }
+    ]);
+    const historical = broker.submit('request_browser_workspace', {
+      required_workspace_count: 1,
+      designated_endpoints: [{ endpoint_nickname: 'profile-a' }]
+    }, caller);
+    const historicalRef = (historical.facts as { ticket: { request_ref: string } }).ticket.request_ref;
+    broker.confirmAcknowledgement(historicalRef, true);
+    const historicalTicket = await eventually(() => broker.getBrowserRequest({ request_ref: historicalRef }, caller));
+    expect(historicalTicket).toMatchObject({ facts: { ticket: { state: 'succeeded' } } });
+    expect((historicalTicket.facts as {
+      ticket: { result: { facts: { resolved: Array<{ workspace: { window_ref: string } }> } } }
+    }).ticket.result.facts.resolved[0]!.workspace.window_ref).toBe(focusedWindowRef);
   });
 
   it('reconciles a lost CREATE_TAB result without opening a duplicate tab', async () => {

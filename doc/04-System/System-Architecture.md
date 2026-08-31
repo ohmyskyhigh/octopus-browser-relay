@@ -56,6 +56,14 @@ Scripted installation builds the broker and extension, registers the MCP server 
 
 Installation reports one explicit unmet prerequisite at a time. It does not become an agent-visible browser-automation tool.
 
+### GitHub Releases install immutable runtimes behind stable local launch and extension paths
+
+Release construction bundles the broker and MCP adapter with their production dependencies, copies migrations and the unpacked extension, gives the native executable a versioned filename, and records the hash and byte length of every packaged file. GitHub publishes the Windows archive, its SHA-256 checksum, and the updater.
+
+The updater verifies the archive checksum and internal manifest before stopping a process. It installs the runtime under a versioned directory, preserves the durable data directory, points stable broker and MCP launchers at the selected release, updates the Native Messaging manifest to the versioned native executable, mirrors extension files into one stable unpacked-extension directory, and commits current-release state before startup. Health must report the selected version. A failed startup restores the prior current-release state, extension files, Native Messaging target, and previously running broker.
+
+Relay `READY` facts carry the broker version, required extension version, and whether reload is required. A version mismatch does not enter broker-ready dispatch. The extension reloads once for that required version through `chrome.runtime.reload()`, reconnects through the refreshed Native Messaging target, and only then publishes inventory. Persisted extension storage retains endpoint identity and pairing. A second mismatch for the same required version fails closed for operator repair.
+
 ## Source of truth
 
 ### Routing truth maps public ownership to current private generations
@@ -134,6 +142,8 @@ Elapsed time and agent disconnect never terminalize a request. The broker can re
 Designated endpoints are normalized by nickname. Conflicting window selections for a repeated endpoint reject. Before ticket creation the broker proves the requested exact count is currently satisfiable on distinct connected eligible endpoints.
 
 Automatic assignment ranks eligible endpoints by fewest active workspaces, then least recent automatic assignment, then endpoint nickname. On each endpoint it uses a submitted eligible `window_ref` or the most recently focused eligible existing window. The worker creates one tab group and at least one managed tab there.
+
+The broker retains each window's latest observed focus timestamp instead of deriving history from the current `focused` flag. A focused inventory observation advances that timestamp; later unfocused observations preserve it. When several eligible windows have no retained focus timestamp, the broker does not label list order as recency and returns `WINDOW_UNAVAILABLE` so the agent can select a broker-issued `window_ref`.
 
 If a persisted workspace has no live group or tab, the broker ends it and automatically creates a replacement with a new `workspace_ref`.
 

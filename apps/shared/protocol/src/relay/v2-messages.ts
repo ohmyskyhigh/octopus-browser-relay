@@ -207,7 +207,10 @@ export const relayV2PayloadSchemas = {
     endpointId: RelayV2EndpointIdentitySchema,
     nickname: z.string().min(1).max(64),
     connectionGeneration: PositiveGenerationSchema,
-    selectedCapabilityManifestId: z.string().min(1).max(128)
+    selectedCapabilityManifestId: z.string().min(1).max(128),
+    brokerVersion: z.string().min(1).max(64),
+    requiredExtensionVersion: z.string().min(1).max(64),
+    reloadExtension: z.boolean()
   }),
   HEARTBEAT: z.strictObject({
     endpointId: RelayV2EndpointIdentitySchema,

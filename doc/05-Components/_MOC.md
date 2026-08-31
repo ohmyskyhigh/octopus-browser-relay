@@ -12,7 +12,7 @@ Status: confirmed for the implementation baseline.
 
 [`Component-Architecture.md`](./Component-Architecture.md) defines Broker Runtime, MCP Gateway, Broker Core, Durable Store, Extension Gateway, Browser Extension, Protocol Contract, and Setup and Qualification.
 
-The design preserves one broker consistency boundary while separating transport adapters, browser execution, persistence, schemas, and verification. Component dependencies point toward Protocol Contract and Broker Core decisions; gateways and storage never become alternate policy owners.
+The design preserves one broker consistency boundary while separating transport adapters, browser execution, persistence, schemas, release/update operations, and verification. Component dependencies point toward Protocol Contract and Broker Core decisions; gateways and storage never become alternate policy owners.
 
 The physical repository nests broker-owned components under `apps/broker`, keeps independently launched or loaded programs as sibling app directories, keeps the shared wire contract under `apps/shared/protocol`, and reserves root `dist/` for generated artifacts.
 

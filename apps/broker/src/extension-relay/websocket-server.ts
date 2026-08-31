@@ -84,6 +84,7 @@ type PendingAttempt = PendingInventory | PendingOperation;
 export interface ExtensionGatewayOptions {
   host: string;
   port: number;
+  serviceVersion: string;
   maxPayloadBytes?: number;
   handshakeTimeoutMs?: number;
   operationTimeoutMs?: number;
@@ -497,7 +498,8 @@ export class ExtensionGateway implements CommandTransport, OctopusExtensionPort 
     };
     const previous = this.registry.bind(connection);
     if (previous && previous.socket !== socket) previous.socket.close(4002, 'Replaced by newer connection');
-    this.octopusBroker?.onExtensionReady(state.endpointRef, state.epoch);
+    const reloadExtension = state.extensionVersion !== this.options.serviceVersion;
+    if (!reloadExtension) this.octopusBroker?.onExtensionReady(state.endpointRef, state.epoch);
     this.store.updateTargetObservation(state.targetId, 'heartbeat');
     this.store.audit('extension.connected', {
       targetAlias: state.alias,
@@ -509,7 +511,10 @@ export class ExtensionGateway implements CommandTransport, OctopusExtensionPort 
       endpointId: state.endpointId,
       nickname: state.alias,
       connectionGeneration: state.epoch,
-      selectedCapabilityManifestId: state.selectedCapabilityManifestId ?? CONSERVATIVE_CAPABILITY_MANIFEST.manifestId
+      selectedCapabilityManifestId: state.selectedCapabilityManifestId ?? CONSERVATIVE_CAPABILITY_MANIFEST.manifestId,
+      brokerVersion: this.options.serviceVersion,
+      requiredExtensionVersion: this.options.serviceVersion,
+      reloadExtension
     });
   }
 

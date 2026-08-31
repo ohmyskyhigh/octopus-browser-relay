@@ -56,6 +56,21 @@ pwsh -NoProfile -File .\tools\install-local.ps1 -Install -StartBroker
 
 The command writes local generated state below `.relay-data/`. Keep the final JSON output; it names the actual extension path, native host path, registration manifest, configured registry roots, MCP instructions, pairing instructions, broker PID file, and health conditions used by this run. The default Windows registration roots are Google Chrome, Chromium, and `HKCU:\Software\AdsPower\SunBrowser\NativeMessagingHosts`, which is the installed AdsPower/SunBrowser root on the qualification device. Pass the actual roots through `-NativeRegistryRoots` when testing another browser build.
 
+### A GitHub Release installation keeps one extension path across updates
+
+The release path uses the standalone updater instead of a source checkout:
+
+```powershell
+Invoke-WebRequest `
+  https://github.com/ohmyskyhigh/octopus-browser-relay/releases/latest/download/octopus-browser-relay-update.ps1 `
+  -OutFile .\octopus-browser-relay-update.ps1
+pwsh -NoProfile -File .\octopus-browser-relay-update.ps1
+```
+
+The result names the stable extension directory under `%LOCALAPPDATA%\Octopus Browser Relay`. Load that directory unpacked once in every intended profile. A later invocation of the installed `update-local.ps1` verifies and installs the next version behind the same extension path. The broker requests one extension reload when versions differ; pairing storage remains in the profile.
+
+Before qualifying an update, require the updater's broker health to report the selected version and require every intended endpoint to reconnect. A repeated extension-version mismatch is a failed checkpoint, not permission to reload indefinitely.
+
 ### The preflight must report READY before browser work begins
 
 Run:

@@ -1,5 +1,7 @@
 # Octopus Browser Relay documentation
 
+[English documentation](./README.md) | [简体中文文档](./zh-CN/README.md)
+
 The documentation vault is the project source of truth. Begin with [`TOP-DOWN-MOC.md`](./TOP-DOWN-MOC.md) and read Product → User Experience → User Interface → System → Components → Files.
 
 ## Authority
@@ -17,3 +19,9 @@ Files under `01-Product` through `06-Files` are canonical in hierarchy order. A 
 - [`99-Changelog`](./99-Changelog/_MOC.md) records applied vault changes.
 
 Editing and evidence rules are in [`AGENTS.md`](./AGENTS.md).
+
+## Translations
+
+### Simplified Chinese operator documents translate public guidance without creating a second authority spine
+
+[`zh-CN/README.md`](./zh-CN/README.md) routes Chinese readers to installation and architecture guidance. English canonical documents remain authoritative when wording differs.

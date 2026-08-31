@@ -3,9 +3,10 @@ import { BrokerCore, OctopusBroker } from '../core/index.js';
 import { ExtensionGateway } from '../extension-relay/index.js';
 import { McpGateway } from '../mcp/index.js';
 import { SqliteRelayStore } from '../storage/index.js';
+import { OCTOPUS_VERSION } from '../../../shared/protocol/src/version.js';
 import type { RelayConfig } from './config.js';
 
-const SERVICE_VERSION = '0.3.0';
+const SERVICE_VERSION = OCTOPUS_VERSION;
 const MCP_CONTRACT_VERSION = '1';
 const RELAY_PROTOCOL_VERSION = '2';
 
@@ -54,7 +55,7 @@ export function createRelayApplication(config: RelayConfig): RelayApplication {
   const extensionGateway = new ExtensionGateway(
     legacyBroker,
     store,
-    { host: config.host, port: config.wsPort },
+    { host: config.host, port: config.wsPort, serviceVersion: SERVICE_VERSION },
     broker
   );
   legacyBroker.setTransport(extensionGateway);

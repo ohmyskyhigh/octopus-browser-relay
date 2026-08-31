@@ -14,6 +14,7 @@ Status: confirmed as the implementation baseline and ready for Component decompo
 
 - broker-owned routing, status, request, event, and audit truth;
 - automatic extension-initiated local pairing with a readable correlation code, persisted-key reconnect authentication, and one endpoint per browser profile;
+- verified GitHub Release installation behind versioned runtimes, stable local launchers, and a one-reload extension version gate;
 - public logical windows, workspaces, tabs, requests, and cursors over private browser generations;
 - ten acknowledgement-gated submissions, three immediate reads, and terminal close;
 - exact distinct-endpoint workspace allocation and existing-window selection;

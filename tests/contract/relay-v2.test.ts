@@ -71,6 +71,23 @@ describe('relay protocol version 2', () => {
     })).toThrow();
   });
 
+  it('makes extension version gating explicit in the ready envelope', () => {
+    const ready = createRelayV2Envelope('READY', {
+      endpointId,
+      nickname: 'mintwave',
+      connectionGeneration: 2,
+      selectedCapabilityManifestId: 'octopus-extension-baseline-v1',
+      brokerVersion: '0.4.0',
+      requiredExtensionVersion: '0.4.0',
+      reloadExtension: true
+    });
+    expect(parseRelayV2Envelope(ready)).toEqual(ready);
+    expect(() => parseRelayV2Envelope({
+      ...ready,
+      payload: { ...ready.payload, requiredExtensionVersion: undefined }
+    })).toThrow();
+  });
+
   it('requires every CDP mutation to carry expected private generations', () => {
     const envelope = createRelayV2Envelope('SEND_CDP', {
       attemptId,

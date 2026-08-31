@@ -212,6 +212,10 @@ await checkHealth('mcp_health', mcpHealthUrl, 'Start the broker with tools/insta
 await checkHealth('relay_health', relayHealthUrl, 'Start the broker and verify the extension relay port is available.');
 
 const pending = checks.filter((check) => check.status === 'action_required');
+const connectedEndpoints = checks.find((check) => check.name === 'mcp_health')?.facts?.connectedEndpoints;
+const readyNextAction = typeof connectedEndpoints === 'number' && connectedEndpoints > 0
+  ? `Confirm the intended profile count (${connectedEndpoints} currently connected), then begin physical MCP qualification.`
+  : 'Load the extension in each intended browser profile and wait for automatic pairing.';
 console.log(JSON.stringify({
   status: pending.length === 0 ? 'READY' : 'ACTION_REQUIRED',
   observedAt: new Date().toISOString(),
@@ -230,7 +234,7 @@ console.log(JSON.stringify({
   nativeRegistryRoots,
   endpoints: { mcpHealthUrl, relayHealthUrl },
   checks,
-  nextAction: pending[0]?.action ?? 'Load the extension in each intended browser profile and wait for automatic pairing.'
+  nextAction: pending[0]?.action ?? readyNextAction
 }, null, 2));
 if (pending.length > 0) process.exitCode = 10;
 

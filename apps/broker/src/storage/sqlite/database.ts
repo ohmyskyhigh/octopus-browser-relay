@@ -147,7 +147,8 @@ export class SqliteRelayStore implements RelayRepositories {
       { version: 1, sql: readFileSync(new URL('./migrations/001-initial.sql', import.meta.url), 'utf8') },
       { version: 2, sql: readFileSync(new URL('./migrations/002-real-world-trace.sql', import.meta.url), 'utf8') },
       { version: 3, sql: readFileSync(new URL('./migrations/003-agent-target-bindings.sql', import.meta.url), 'utf8') },
-      { version: 4, sql: readFileSync(new URL('./migrations/004-workspaces-requests.sql', import.meta.url), 'utf8') }
+      { version: 4, sql: readFileSync(new URL('./migrations/004-workspaces-requests.sql', import.meta.url), 'utf8') },
+      { version: 5, sql: readFileSync(new URL('./migrations/005-window-focus-history.sql', import.meta.url), 'utf8') }
     ];
     this.db.exec('CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL)');
     for (const migration of migrations) {

@@ -316,7 +316,7 @@
           "properties": {
             "kind": { "const": "endpoints" },
             "conditions": { "type": "array", "items": { "$ref": "#/$defs/endpoint_condition" }, "uniqueItems": true },
-            "page_size": { "type": "integer", "minimum": 1 },
+            "page_size": { "type": "integer", "minimum": 1, "maximum": 100 },
             "cursor": { "oneOf": [{ "$ref": "#/$defs/broker_issued_cursor" }, { "type": "null" }] }
           },
           "required": ["kind", "conditions", "page_size", "cursor"],
@@ -334,7 +334,7 @@
             "kind": { "const": "windows" },
             "endpoint_nickname": { "$ref": "#/$defs/endpoint_nickname" },
             "eligible_only": { "type": "boolean" },
-            "page_size": { "type": "integer", "minimum": 1 },
+            "page_size": { "type": "integer", "minimum": 1, "maximum": 100 },
             "cursor": { "oneOf": [{ "$ref": "#/$defs/broker_issued_cursor" }, { "type": "null" }] }
           },
           "required": ["kind", "endpoint_nickname", "eligible_only", "page_size", "cursor"],
@@ -345,7 +345,7 @@
           "properties": {
             "kind": { "const": "window" },
             "window_ref": { "$ref": "#/$defs/window_ref" },
-            "page_size": { "type": "integer", "minimum": 1 },
+            "page_size": { "type": "integer", "minimum": 1, "maximum": 100 },
             "cursor": { "oneOf": [{ "$ref": "#/$defs/broker_issued_cursor" }, { "type": "null" }] }
           },
           "required": ["kind", "window_ref", "page_size", "cursor"],
@@ -358,7 +358,7 @@
             "endpoint_nickname": { "$ref": "#/$defs/endpoint_nickname" },
             "window_ref": { "oneOf": [{ "$ref": "#/$defs/window_ref" }, { "type": "null" }] },
             "method_prefix": { "type": ["string", "null"] },
-            "page_size": { "type": "integer", "minimum": 1 },
+            "page_size": { "type": "integer", "minimum": 1, "maximum": 100 },
             "cursor": { "oneOf": [{ "$ref": "#/$defs/broker_issued_cursor" }, { "type": "null" }] }
           },
           "required": ["kind", "endpoint_nickname", "window_ref", "method_prefix", "page_size", "cursor"],
@@ -369,7 +369,7 @@
           "properties": {
             "kind": { "const": "workspaces" },
             "parent_workspace_ref": { "oneOf": [{ "$ref": "#/$defs/broker_issued_ref" }, { "type": "null" }] },
-            "page_size": { "type": "integer", "minimum": 1 },
+            "page_size": { "type": "integer", "minimum": 1, "maximum": 100 },
             "cursor": { "oneOf": [{ "$ref": "#/$defs/broker_issued_cursor" }, { "type": "null" }] }
           },
           "required": ["kind", "parent_workspace_ref", "page_size", "cursor"],
@@ -380,7 +380,7 @@
           "properties": {
             "kind": { "const": "workspace" },
             "workspace_ref": { "$ref": "#/$defs/broker_issued_ref" },
-            "page_size": { "type": "integer", "minimum": 1 },
+            "page_size": { "type": "integer", "minimum": 1, "maximum": 100 },
             "cursor": { "oneOf": [{ "$ref": "#/$defs/broker_issued_cursor" }, { "type": "null" }] }
           },
           "required": ["kind", "workspace_ref", "page_size", "cursor"],
@@ -392,7 +392,7 @@
             "kind": { "const": "workspace_requests" },
             "workspace_ref": { "$ref": "#/$defs/broker_issued_ref" },
             "states": { "type": "array", "items": { "enum": ["queued", "running", "succeeded", "failed", "uncertain"] }, "minItems": 1, "uniqueItems": true },
-            "page_size": { "type": "integer", "minimum": 1 },
+            "page_size": { "type": "integer", "minimum": 1, "maximum": 100 },
             "cursor": { "oneOf": [{ "$ref": "#/$defs/broker_issued_cursor" }, { "type": "null" }] }
           },
           "required": ["kind", "workspace_ref", "states", "page_size", "cursor"],
@@ -505,7 +505,7 @@
     },
     "request_browser_workspace_input": {
       "type": "object",
-      "description": "required_workspace_count counts distinct endpoints. The caller input may repeat a designated endpoint nickname; the broker normalizes exact repeats so each counts once, and the accepted ticket's normalized designated set is distinct and cannot exceed the count. Omitting window_ref requests the most-recently-focused eligible existing window on that endpoint. Different window_ref values on repeated entries reject synchronously as INVALID_ARGUMENT.",
+      "description": "required_workspace_count counts distinct endpoints. The caller input may repeat a designated endpoint nickname; the broker normalizes exact repeats so each counts once, and the accepted ticket's normalized designated set is distinct and cannot exceed the count. Omitting window_ref requests the most-recently-focused eligible existing window on that endpoint. If several eligible windows exist without focus history, execution fails with WINDOW_UNAVAILABLE and the agent retries with a broker-issued window_ref. Different window_ref values on repeated entries reject synchronously as INVALID_ARGUMENT.",
       "properties": {
         "required_workspace_count": { "type": "integer", "minimum": 1 },
         "designated_endpoints": { "type": "array", "items": { "$ref": "#/$defs/designated_endpoint_request" } }
@@ -743,7 +743,7 @@
         "workspace_ref": { "$ref": "#/$defs/broker_issued_ref" },
         "target": { "$ref": "#/$defs/cdp_target" },
         "cursor": { "$ref": "#/$defs/broker_issued_cursor" },
-        "page_size": { "type": "integer", "minimum": 1 },
+        "page_size": { "type": "integer", "minimum": 1, "maximum": 100 },
         "method_filters": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true }
       },
       "required": ["workspace_ref", "target", "cursor", "page_size"],

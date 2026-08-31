@@ -12,7 +12,7 @@ Status: the current repository map and physical runbook are canonical File-level
 
 [`Repository-Map.md`](./Repository-Map.md) maps the current Broker Runtime, MCP Gateway, Broker Core, Durable Store, Extension Gateway, Browser Extension, Protocol Contract, setup, and verification files.
 
-Broker-specific source is nested under `apps/broker`; independently launched or loaded programs remain sibling app directories; the shared protocol lives under `apps/shared/protocol`; setup code lives under `tools`; and generated artifacts live only under root `dist/`. The map also distinguishes retained relay-v1 migration code and automated evidence paths.
+Broker-specific source is nested under `apps/broker`; independently launched or loaded programs remain sibling app directories; the shared protocol lives under `apps/shared/protocol`; setup and GitHub Release update code lives under `tools`; and generated runtime artifacts live under root `dist/` while release packages live under ignored `artifacts/release/`. The map also distinguishes retained relay-v1 migration code and automated evidence paths.
 
 ## Real-world qualification
 
@@ -21,6 +21,12 @@ Broker-specific source is nested under `apps/broker`; independently launched or 
 [`Real-World-Runbook.md`](./Real-World-Runbook.md) maps installation, preflight, profile pairing, local fixtures, agent registration, ticketed CDP execution, concurrency, recovery, controls, evidence, and cleanup to checked-in commands and paths.
 
 The runbook keeps Native Messaging qualification separate from direct-WebSocket diagnostics and records unresolved adapter or setup behavior as a failed or blocked checkpoint.
+
+## Translated operator guidance
+
+### Simplified Chinese entry documents remain traceable to the canonical English Files and contracts
+
+[`../zh-CN/README.md`](../zh-CN/README.md) routes readers to Chinese installation and architecture/MCP guidance. These translations help operators but do not replace the canonical English authority spine.
 
 ## Planned changes
 

@@ -1,5 +1,5 @@
 import { generateKeyPairSync, sign } from 'node:crypto';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import WebSocket from 'ws';
 import { BrokerCore, OctopusBroker, type ExtensionEventSink } from '../../apps/broker/src/core/index.js';
 import { ExtensionGateway } from '../../apps/broker/src/extension-relay/index.js';
@@ -60,7 +60,12 @@ describe('extension WebSocket gateway', () => {
     store = new SqliteRelayStore(':memory:');
     broker = new BrokerCore(store);
     octopus = new OctopusBroker(store.canonical);
-    gateway = new ExtensionGateway(broker, store, { host: '127.0.0.1', port: 0 }, octopus);
+    gateway = new ExtensionGateway(
+      broker,
+      store,
+      { host: '127.0.0.1', port: 0, serviceVersion: '0.3.0-test' },
+      octopus
+    );
     broker.setTransport(gateway);
     socket = null;
   });
@@ -156,7 +161,7 @@ describe('extension WebSocket gateway', () => {
       publicKeyJwk,
       pairingCode: 'MINT-WAVE',
       proposedNickname: 'mintwave',
-      extensionVersion: '0.2.0',
+      extensionVersion: '0.3.0-test',
       browser: { product: 'Chrome', version: '140.0.0.0', userAgent: null },
       supportedProtocolVersions: [2],
       capabilityManifestIds: ['octopus-extension-baseline-v1'],
@@ -170,7 +175,7 @@ describe('extension WebSocket gateway', () => {
       endpointId: paired.payload.endpointId,
       publicKeyJwk,
       proposedNickname: 'mintwave',
-      extensionVersion: '0.2.0',
+      extensionVersion: '0.3.0-test',
       browser: { product: 'Chrome', version: '140.0.0.0', userAgent: null },
       supportedProtocolVersions: [2],
       capabilityManifestIds: ['octopus-extension-baseline-v1'],
@@ -192,6 +197,11 @@ describe('extension WebSocket gateway', () => {
     })));
     const ready = await readyMessage as RelayV2Envelope<'READY'>;
     expect(ready.type).toBe('READY');
+    expect(ready.payload).toMatchObject({
+      brokerVersion: '0.3.0-test',
+      requiredExtensionVersion: '0.3.0-test',
+      reloadExtension: false
+    });
 
     const endpoint = store.canonical.logical.getEndpointByNickname('mintwave');
     expect(endpoint).not.toBeNull();
@@ -280,7 +290,7 @@ describe('extension WebSocket gateway', () => {
       endpointId: paired.payload.endpointId,
       publicKeyJwk,
       proposedNickname: 'octopus-test',
-      extensionVersion: '0.2.0',
+      extensionVersion: '0.3.0-test',
       browser: { product: 'Chrome', version: '140.0.0.0', userAgent: null },
       supportedProtocolVersions: [2],
       capabilityManifestIds: ['octopus-extension-baseline-v1'],
@@ -303,6 +313,59 @@ describe('extension WebSocket gateway', () => {
     socket = replacement;
     expect(gateway.connection(endpoint!.endpointRef)?.connectionGeneration)
       .toBe(replacementChallenge.payload.connectionGeneration);
+  });
+
+  it('requests reload and withholds broker readiness for a mismatched extension version', async () => {
+    const readySpy = vi.spyOn(octopus, 'onExtensionReady');
+    const keys = generateKeyPairSync('ec', { namedCurve: 'P-256' });
+    const publicKeyJwk = keys.publicKey.export({ format: 'jwk' }) as RelayV2PayloadByType['HELLO']['publicKeyJwk'];
+    await gateway.start();
+    const { port } = gateway.address();
+    socket = new WebSocket(`ws://127.0.0.1:${port}/relay`);
+    await new Promise<void>((resolve, reject) => { socket!.once('open', resolve); socket!.once('error', reject); });
+
+    const pairedNext = nextV2Message(socket);
+    socket.send(JSON.stringify(createRelayV2Envelope('HELLO', {
+      publicKeyJwk,
+      pairingCode: 'SOFT-CLOUD',
+      proposedNickname: 'softcloud',
+      extensionVersion: '0.2.0',
+      browser: { product: 'Chrome', version: '140.0.0.0', userAgent: null },
+      supportedProtocolVersions: [2],
+      capabilityManifestIds: ['octopus-extension-baseline-v1'],
+      maxEnvelopeBytes: MAX_RELAY_V2_ENVELOPE_BYTES
+    })));
+    const paired = await pairedNext as RelayV2Envelope<'PAIRED'>;
+
+    const challengeNext = nextV2Message(socket);
+    socket.send(JSON.stringify(createRelayV2Envelope('HELLO', {
+      endpointId: paired.payload.endpointId,
+      publicKeyJwk,
+      proposedNickname: 'softcloud',
+      extensionVersion: '0.2.0',
+      browser: { product: 'Chrome', version: '140.0.0.0', userAgent: null },
+      supportedProtocolVersions: [2],
+      capabilityManifestIds: ['octopus-extension-baseline-v1'],
+      maxEnvelopeBytes: MAX_RELAY_V2_ENVELOPE_BYTES
+    })));
+    const challenge = await challengeNext as RelayV2Envelope<'CHALLENGE'>;
+    const readyNext = nextV2Message(socket);
+    socket.send(JSON.stringify(createRelayV2Envelope('AUTH', {
+      endpointId: paired.payload.endpointId,
+      signature: sign('sha256', Buffer.from(challenge.payload.nonce), {
+        key: keys.privateKey,
+        dsaEncoding: 'ieee-p1363'
+      }).toString('base64url'),
+      connectionGeneration: challenge.payload.connectionGeneration,
+      selectedProtocolVersion: 2
+    })));
+    const ready = await readyNext as RelayV2Envelope<'READY'>;
+    expect(ready.payload).toMatchObject({
+      brokerVersion: '0.3.0-test',
+      requiredExtensionVersion: '0.3.0-test',
+      reloadExtension: true
+    });
+    expect(readySpy).not.toHaveBeenCalled();
   });
 
   it('returns a retryable conflict so an unpaired extension can generate another two-word nickname', async () => {
@@ -359,7 +422,7 @@ describe('extension WebSocket gateway', () => {
       publicKeyJwk,
       pairingCode: 'CALM-REEF',
       proposedNickname: 'calmreef',
-      extensionVersion: '0.2.0',
+      extensionVersion: '0.3.0-test',
       browser: { product: 'Chrome', version: '140.0.0.0', userAgent: null },
       supportedProtocolVersions: [2],
       capabilityManifestIds: ['octopus-extension-baseline-v1'],
@@ -371,7 +434,7 @@ describe('extension WebSocket gateway', () => {
       endpointId: paired.payload.endpointId,
       publicKeyJwk,
       proposedNickname: 'calmreef',
-      extensionVersion: '0.2.0',
+      extensionVersion: '0.3.0-test',
       browser: { product: 'Chrome', version: '140.0.0.0', userAgent: null },
       supportedProtocolVersions: [2],
       capabilityManifestIds: ['octopus-extension-baseline-v1'],

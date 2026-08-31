@@ -173,6 +173,7 @@ export interface StoredLogicalWindow {
   locatorGeneration: number;
   focused: boolean;
   eligible: boolean;
+  lastFocusedAt: string | null;
   lastObservedAt: string;
   createdAt: string;
   updatedAt: string;
