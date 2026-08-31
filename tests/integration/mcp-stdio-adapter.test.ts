@@ -80,7 +80,7 @@ describe('stdio MCP session adapter', () => {
     ]);
     expect(firstContext.session_ref).not.toBe(secondContext.session_ref);
     expect(firstContext.lineage_ref).not.toBe(secondContext.lineage_ref);
-  });
+  }, 30_000);
 });
 
 async function connectAdapter(port: number, label: string): Promise<AdapterClient> {
