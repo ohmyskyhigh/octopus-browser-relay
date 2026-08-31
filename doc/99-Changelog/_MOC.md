@@ -4,6 +4,7 @@ This directory records applied changes to vault structure and canonical document
 
 ## Entries
 
+- [`2026-08-31-v0.3.0-publication.md`](./2026-08-31-v0.3.0-publication.md)
 - [`2026-08-31-bilingual-public-documentation.md`](./2026-08-31-bilingual-public-documentation.md)
 - [`2026-08-31-github-release-update.md`](./2026-08-31-github-release-update.md)
 - [`2026-08-31-physical-qualification-corrections.md`](./2026-08-31-physical-qualification-corrections.md)
