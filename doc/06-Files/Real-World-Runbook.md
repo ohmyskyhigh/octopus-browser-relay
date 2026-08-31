@@ -41,7 +41,7 @@ Node must satisfy the root `package.json` engine (`>=22.12.0`). Building the nat
 
 ### Existing browser profiles and pairing state remain user data
 
-The setup and test commands do not delete browser profiles. Do not reset extension pairing merely to repeat a run. Use **Reset pairing** only when intentionally replacing that endpoint identity, then generate a new code.
+The setup and test commands do not delete browser profiles. Do not reset extension pairing merely to repeat a run. Use **Reset pairing** only when intentionally replacing that endpoint identity; the extension then generates a new readable code, key, and nickname candidate and registers automatically.
 
 ## Installation
 
@@ -51,7 +51,7 @@ From the repository root:
 
 ```powershell
 corepack enable
-pwsh -NoProfile -File .\scripts\install-local.ps1 -Install -StartBroker
+pwsh -NoProfile -File .\tools\install-local.ps1 -Install -StartBroker
 ```
 
 The command writes local generated state below `.relay-data/`. Keep the final JSON output; it names the actual extension path, native host path, registration manifest, configured registry roots, MCP instructions, pairing instructions, broker PID file, and health conditions used by this run. The default Windows registration roots are Google Chrome, Chromium, and `HKCU:\Software\AdsPower\SunBrowser\NativeMessagingHosts`, which is the installed AdsPower/SunBrowser root on the qualification device. Pass the actual roots through `-NativeRegistryRoots` when testing another browser build.
@@ -61,7 +61,7 @@ The command writes local generated state below `.relay-data/`. Keep the final JS
 Run:
 
 ```powershell
-pwsh -NoProfile -File .\scripts\real-world-preflight.ps1
+pwsh -NoProfile -File .\tools\real-world-preflight.ps1
 ```
 
 Expected top-level result:
@@ -79,14 +79,14 @@ If it reports `ACTION_REQUIRED`, perform the first returned `nextAction` and rer
 The installer launches a hidden compiled broker and records its process ID in `.relay-data/broker.pid`. Stop that process with:
 
 ```powershell
-pwsh -NoProfile -File .\scripts\stop-local-broker.ps1
+pwsh -NoProfile -File .\tools\stop-local-broker.ps1
 ```
 
 The stop command requires the recorded process to be `node.exe` running this workspace's absolute compiled broker entry point. It refuses an unrelated PID, retains stale or mismatched PID files for inspection, and deletes the PID file only after the matching process has stopped. A foreground `pnpm dev` broker still stops with `Ctrl+C`.
 
 ### Development runs can replace the compiled broker after one-time registration
 
-Stop the installer-started broker with `scripts\stop-local-broker.ps1` before opening a second process on the same ports. Then run:
+Stop the installer-started broker with `tools\stop-local-broker.ps1` before opening a second process on the same ports. Then run:
 
 ```powershell
 pnpm build:extension
@@ -106,27 +106,20 @@ In every intended profile:
 3. Choose **Load unpacked** and select the absolute `extensionPath` printed by the installer.
 4. Confirm extension ID `caekiojlchhifdomfghejkbfpmaklafe`.
 5. Accept the extension's `debugger`, `tabGroups`, and Native Messaging permissions.
-6. Open **Octopus Browser Relay Settings** and copy the proposed nickname for use in the next local command.
+6. Open **Octopus Browser Relay Settings** and observe the profile-local readable pairing code, proposed endpoint nickname, and connection status.
 
-### One local command issues a short-lived code for the displayed nickname
-
-For each profile, run:
-
-```powershell
-pnpm pair --nickname "<displayed nickname>"
-```
-
-If the broker uses a non-default database, add `--db "<path>"`. The command returns `endpoint_nickname`, `pairing_code`, `expires_at`, and `database_path`. Do not put the code in chat or test notes.
+### The extension pairs automatically without a copied broker code
 
 In that profile's extension options:
 
 1. keep **Native companion** selected;
 2. keep the relay URL aligned with the broker, normally `ws://127.0.0.1:7332/relay`;
-3. enter the code;
-4. choose **Save and connect**; and
-5. wait for `Status: connected`.
+3. choose **Save connection settings** only if you changed either setting; and
+4. wait for `Status: connected`.
 
-Generate a new code for every profile. Codes are one-use and default to ten minutes.
+On its first connection the extension sends its generated two-word code, combined lowercase nickname, and public profile identity to the loopback broker. For example, `MINT-WAVE` appears as endpoint nickname `mintwave`. The broker registers the endpoint automatically, then uses challenge authentication for that and later connections. The readable code identifies this installation for the human; it is not a password or an authorization grant.
+
+Repeat this in every profile. Each profile has separate extension storage and therefore generates its own identity, code, and nickname. If two unpaired profiles happen to select the same nickname, the later extension receives a retryable conflict, chooses another two-word label, and retries without human input.
 
 ### Health confirms how many paired endpoints are currently connected
 
@@ -277,7 +270,7 @@ Record this table for the run:
 | Checkpoint | Required evidence |
 | --- | --- |
 | Setup | Installer output and preflight `READY` |
-| Pairing | Distinct nicknames and `Status: connected` in every profile |
+| Pairing | A distinct displayed extension-generated code and endpoint nickname plus `Status: connected` in every profile, with no manual code entry |
 | MCP surface | Exactly fourteen canonical tools in Codex and Hermes |
 | Ticket ordering | Accepted `request_ref` observed before terminal result |
 | Routing | A/B/C workspaces return A/B/C fixture markers |
@@ -286,7 +279,7 @@ Record this table for the run:
 | Controls | Stop/resume, endpoint kill/resume, and termination produce polled terminal evidence |
 | Transport | Normal runs report Native Messaging, not direct WebSocket |
 
-State which browser product and version, extension version, broker service version, MCP contract version, and relay protocol version were observed. Do not include tokens, pairing codes, raw private browser identifiers, profile paths, or the SQLite database in the evidence.
+State which browser product and version, extension version, broker service version, MCP contract version, and relay protocol version were observed. The readable pairing code may be checked on screen during installation but should not be retained in shared qualification evidence. Do not include bearer tokens, private browser identifiers, profile paths, or the SQLite database.
 
 ## Known qualification limits
 
@@ -305,10 +298,10 @@ State which browser product and version, extension version, broker service versi
 
 ### Stopping test processes preserves browser and broker state for inspection
 
-Stop the fixture server and a foreground broker with `Ctrl+C` after recording results. Stop an installer-started hidden broker with `pwsh -NoProfile -File .\scripts\stop-local-broker.ps1`. Do not delete `.relay-data` or reset pairing as routine cleanup. Archived tab groups remain for the human to inspect and close.
+Stop the fixture server and a foreground broker with `Ctrl+C` after recording results. Stop an installer-started hidden broker with `pwsh -NoProfile -File .\tools\stop-local-broker.ps1`. Do not delete `.relay-data` or reset pairing as routine cleanup. Archived tab groups remain for the human to inspect and close.
 
 Generated evidence under `artifacts/real-world/` can be preserved. The existing cleanup script intentionally prints the evidence location and does not delete Chrome profiles:
 
 ```powershell
-pwsh -NoProfile -File .\scripts\real-world-cleanup.ps1 -RunId "<run-id>"
+pwsh -NoProfile -File .\tools\real-world-cleanup.ps1 -RunId "<run-id>"
 ```

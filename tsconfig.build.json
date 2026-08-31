@@ -2,7 +2,12 @@
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "noEmit": false,
-    "rootDir": "."
+    "rootDir": "apps"
   },
-  "exclude": ["node_modules", "dist", "tests", "apps/extension/dist", "vitest.config.ts"]
+  "include": [
+    "apps/broker/**/*.ts",
+    "apps/mcp-stdio-adapter/**/*.ts",
+    "apps/shared/**/*.ts"
+  ],
+  "exclude": ["node_modules", "dist", "apps/browser-extension", "tests", "tools", "vitest.config.ts"]
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { assertCommandTransition, isTerminalCommandState } from '../../packages/broker-core/src/index.js';
+import { assertCommandTransition, isTerminalCommandState } from '../../apps/broker/src/core/index.js';
 
 describe('command state machine', () => {
   it('allows only documented transitions', () => {

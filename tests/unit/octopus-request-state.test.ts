@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { DeterministicReferenceFactory } from '../../packages/broker-core/src/octopus/reference-factory.js';
-import { updateRequestProgress } from '../../packages/broker-core/src/octopus/request-state-machine.js';
-import { TabLane } from '../../packages/broker-core/src/octopus/tab-lane.js';
+import { DeterministicReferenceFactory } from '../../apps/broker/src/core/octopus/reference-factory.js';
+import { updateRequestProgress } from '../../apps/broker/src/core/octopus/request-state-machine.js';
+import { TabLane } from '../../apps/broker/src/core/octopus/tab-lane.js';
 
 describe('Octopus request primitives', () => {
   it('issues opaque typed references without routing data', () => {

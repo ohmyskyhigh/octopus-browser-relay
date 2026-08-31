@@ -2,9 +2,9 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { BrokerCore, type CommandTransport } from '../../packages/broker-core/src/index.js';
-import type { BrokerCommand } from '../../packages/protocol/src/index.js';
-import { SqliteRelayStore } from '../../packages/storage/src/index.js';
+import { BrokerCore, type CommandTransport } from '../../apps/broker/src/core/index.js';
+import type { BrokerCommand } from '../../apps/shared/protocol/src/index.js';
+import { SqliteRelayStore } from '../../apps/broker/src/storage/index.js';
 import { testBinding, testPrincipal, testTarget } from '../helpers.js';
 
 class CapturingTransport implements CommandTransport {

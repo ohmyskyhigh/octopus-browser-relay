@@ -5,9 +5,9 @@ import {
   type ExtensionOperationType,
   type ExtensionEventSink,
   type OctopusExtensionPort
-} from '../../packages/broker-core/src/index.js';
-import { parseMcpToolOutput, type RelayV2PayloadByType } from '../../packages/protocol/src/index.js';
-import { SqliteRelayStore } from '../../packages/storage/src/index.js';
+} from '../../apps/broker/src/core/index.js';
+import { parseMcpToolOutput, type RelayV2PayloadByType } from '../../apps/shared/protocol/src/index.js';
+import { SqliteRelayStore } from '../../apps/broker/src/storage/index.js';
 
 const observed = {
   connectionGeneration: 1,

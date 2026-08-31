@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Octopus Browser Relay Settings</title>
+</head>
+<body>
+  <main>
+    <h1>Octopus Browser Relay Settings</h1>
+    <p>This extension connects only this Chrome profile to the local broker.</p>
+    <p>Profile nickname: <strong id="profile-nickname">creating…</strong></p>
+    <p>Pairing code: <strong id="pairing-code">creating…</strong></p>
+    <form id="settings-form">
+      <label>Local broker relay URL <input id="broker-url" type="url" required value="ws://127.0.0.1:7332/relay"></label>
+      <label>Transport
+        <select id="transport-mode">
+          <option value="native">Native companion (recommended)</option>
+          <option value="websocket">Direct WebSocket (diagnostics only)</option>
+        </select>
+      </label>
+      <button type="submit">Save connection settings</button>
+    </form>
+    <p>The extension generates two English words, combines them into a short nickname without digits, and registers automatically with the local broker. The displayed code identifies this installation; it is not a password.</p>
+    <p>Normal Chrome and AdsPower both use the native companion. Direct WebSocket is retained only for explicit diagnostics.</p>
+    <p id="status" role="status"></p>
+    <button id="reset" type="button">Reset pairing</button>
+  </main>
+  <script type="module" src="options.js"></script>
+</body>
+</html>

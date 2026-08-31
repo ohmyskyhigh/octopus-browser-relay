@@ -24,10 +24,10 @@ const absolute = (value: string, base: string): string =>
 const workspace = absolute(argument('workspace', '.'), process.cwd());
 const mcpHealthUrl = argument('mcp-health', 'http://127.0.0.1:7331/health');
 const relayHealthUrl = argument('relay-health', 'http://127.0.0.1:7332/health');
-const extensionPath = absolute(argument('extension', 'apps/extension/dist'), workspace);
-const nativeHostPath = absolute(argument('native-host', 'dist/apps/native-host/relay-native-host.exe'), workspace);
+const extensionPath = absolute(argument('extension', 'dist/browser-extension'), workspace);
+const nativeHostPath = absolute(argument('native-host', 'dist/native-host/relay-native-host.exe'), workspace);
 const mcpAdapterPath = absolute(
-  argument('mcp-adapter', 'dist/packages/mcp-stdio-adapter/src/main.js'),
+  argument('mcp-adapter', 'dist/mcp-stdio-adapter/src/main.js'),
   workspace
 );
 const nativeManifestPath = absolute(
@@ -131,7 +131,7 @@ if (!existsSync(nativeManifestPath)) {
   actionRequired(
     'native_host_manifest',
     `Native Messaging manifest is missing at ${nativeManifestPath}.`,
-    'Run scripts/install-local.ps1 -Install to generate and register it for the current user.'
+    'Run tools/install-local.ps1 -Install to generate and register it for the current user.'
   );
 } else {
   try {
@@ -151,7 +151,7 @@ if (!existsSync(nativeManifestPath)) {
       actionRequired(
         'native_host_manifest',
         'Native Messaging manifest does not match the built host or fixed extension identity.',
-        'Rerun scripts/install-local.ps1 -Install with the intended parameterized paths.'
+        'Rerun tools/install-local.ps1 -Install with the intended parameterized paths.'
       );
     } else {
       ready('native_host_manifest', `Native Messaging manifest is valid at ${nativeManifestPath}.`, {
@@ -163,7 +163,7 @@ if (!existsSync(nativeManifestPath)) {
     actionRequired(
       'native_host_manifest',
       `Native Messaging manifest cannot be parsed: ${error instanceof Error ? error.message : 'unknown error'}.`,
-      'Rerun scripts/install-local.ps1 -Install.'
+      'Rerun tools/install-local.ps1 -Install.'
     );
   }
 }
@@ -189,22 +189,26 @@ if (!existsSync(pairingInstructionsPath)) {
   actionRequired(
     'pairing_instructions',
     `Pairing instructions are missing at ${pairingInstructionsPath}.`,
-    'Run scripts/install-local.ps1 -Install to generate path-specific instructions.'
+    'Run tools/install-local.ps1 -Install to generate path-specific instructions.'
   );
 } else {
   const instructions = readFileSync(pairingInstructionsPath, 'utf8');
-  if (!instructions.includes(extensionPath) || !/pairing code/i.test(instructions) || !/Native companion/i.test(instructions)) {
+  if (!instructions.includes(extensionPath)
+    || !/pairing code/i.test(instructions)
+    || !/registers automatically/i.test(instructions)
+    || /pnpm pair --nickname|enter the returned pairing_code/i.test(instructions)
+    || !/Native companion/i.test(instructions)) {
     actionRequired(
       'pairing_instructions',
       'Pairing instructions do not match the selected extension path or required Native Messaging flow.',
-      'Regenerate instructions with scripts/install-local.ps1 -Install and the same bootstrap parameters.'
+      'Regenerate instructions with tools/install-local.ps1 -Install and the same bootstrap parameters.'
     );
   } else {
     ready('pairing_instructions', `Pairing steps are ready at ${pairingInstructionsPath}.`);
   }
 }
 
-await checkHealth('mcp_health', mcpHealthUrl, 'Start the broker with scripts/install-local.ps1 -Install -StartBroker.');
+await checkHealth('mcp_health', mcpHealthUrl, 'Start the broker with tools/install-local.ps1 -Install -StartBroker.');
 await checkHealth('relay_health', relayHealthUrl, 'Start the broker and verify the extension relay port is available.');
 
 const pending = checks.filter((check) => check.status === 'action_required');
@@ -226,7 +230,7 @@ console.log(JSON.stringify({
   nativeRegistryRoots,
   endpoints: { mcpHealthUrl, relayHealthUrl },
   checks,
-  nextAction: pending[0]?.action ?? 'Load and pair each intended browser profile.'
+  nextAction: pending[0]?.action ?? 'Load the extension in each intended browser profile and wait for automatic pairing.'
 }, null, 2));
 if (pending.length > 0) process.exitCode = 10;
 

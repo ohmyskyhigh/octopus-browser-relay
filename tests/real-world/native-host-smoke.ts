@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 
-const executable = resolve(process.argv[2] ?? 'dist/apps/native-host/relay-native-host.exe');
+const executable = resolve(process.argv[2] ?? 'dist/native-host/relay-native-host.exe');
 const relayUrl = process.argv[3] ?? 'ws://127.0.0.1:7332/relay';
 const child = spawn(executable, [], { stdio: ['pipe', 'pipe', 'inherit'] });
 const messages: unknown[] = [];

@@ -2,11 +2,15 @@ import { describe, expect, it } from 'vitest';
 import {
   BrowserInventory,
   type BrowserInventoryApi
-} from '../../apps/extension/src/browser/inventory.js';
+} from '../../apps/browser-extension/src/browser/inventory.js';
 import {
   TabGroupOperations,
   type BrowserMutationApi
-} from '../../apps/extension/src/browser/tab-groups.js';
+} from '../../apps/browser-extension/src/browser/tab-groups.js';
+import {
+  createNicknameFromPairingCode,
+  createRandomPairingCode
+} from '../../apps/browser-extension/src/identity/device-identity.js';
 
 const makeTab = (overrides: Partial<chrome.tabs.Tab> = {}): chrome.tabs.Tab => ({
   active: true,
@@ -118,6 +122,14 @@ class FakeBrowserApi implements BrowserInventoryApi, BrowserMutationApi {
 }
 
 describe('extension browser adapter', () => {
+  it('creates a two-word code and a short combined nickname without digits', () => {
+    const code = createRandomPairingCode();
+    expect(code).toMatch(/^[A-Z]{3,8}-[A-Z]{3,8}$/);
+    expect(code).not.toMatch(/\d/);
+    expect(createRandomPairingCode(code)).not.toBe(code);
+    expect(createNicknameFromPairingCode('MINT-WAVE')).toBe('mintwave');
+  });
+
   it('reconciles private locators and performs tab-group mutations without creating public IDs', async () => {
     const api = new FakeBrowserApi();
     const inventory = new BrowserInventory(api);

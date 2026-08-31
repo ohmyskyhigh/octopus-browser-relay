@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { TargetStateIndex } from '../../packages/broker-core/src/index.js';
-import { SqliteRelayStore } from '../../packages/storage/src/index.js';
+import { TargetStateIndex } from '../../apps/broker/src/core/index.js';
+import { SqliteRelayStore } from '../../apps/broker/src/storage/index.js';
 import { testTarget } from '../helpers.js';
 
 describe('target state derivation', () => {

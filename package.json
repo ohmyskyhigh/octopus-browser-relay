@@ -8,12 +8,12 @@
     "node": ">=22.12.0"
   },
   "scripts": {
-    "dev": "tsx apps/broker/src/main.ts",
-    "pair": "tsx scripts/create-pairing-code.ts",
-    "start": "node dist/apps/broker/src/main.js",
-    "build": "pnpm build:extension && tsc -p tsconfig.build.json && tsx scripts/copy-assets.ts && pnpm build:native",
-    "build:extension": "tsx scripts/build-extension.ts",
-    "build:native": "pwsh -NoProfile -File scripts/build-native-host.ps1",
+    "dev": "tsx apps/broker/src/runtime/main.ts",
+    "pair:legacy": "tsx tools/create-pairing-code.ts",
+    "start": "node dist/broker/src/runtime/main.js",
+    "build": "pnpm build:extension && tsc -p tsconfig.build.json && tsx tools/copy-assets.ts && pnpm build:native",
+    "build:extension": "tsx tools/build-extension.ts",
+    "build:native": "pwsh -NoProfile -File tools/build-native-host.ps1",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test": "vitest run --exclude tests/e2e/**",
@@ -21,7 +21,7 @@
     "test:real-world": "vitest run tests/e2e/multi-agent-multi-extension.test.ts",
     "preflight:real-world": "tsx tests/real-world/setup-readiness.ts",
     "verify": "pnpm lint && pnpm typecheck && pnpm test && pnpm test:e2e && pnpm build",
-    "smoke": "tsx scripts/smoke-test.ts"
+    "smoke": "tsx tools/smoke-test.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/client": "2.0.0",

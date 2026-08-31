@@ -8,11 +8,11 @@ Status: the current repository map and physical runbook are canonical File-level
 
 ## Current repository
 
-### Every existing implementation path has one Component owner and verification role
+### App-owned paths make each implementation owner visible from the top down
 
 [`Repository-Map.md`](./Repository-Map.md) maps the current Broker Runtime, MCP Gateway, Broker Core, Durable Store, Extension Gateway, Browser Extension, Protocol Contract, setup, and verification files.
 
-It distinguishes the canonical implementation, retained relay-v1 migration bridge, generated artifacts, and automated evidence paths.
+Broker-specific source is nested under `apps/broker`; independently launched or loaded programs remain sibling app directories; the shared protocol lives under `apps/shared/protocol`; setup code lives under `tools`; and generated artifacts live only under root `dist/`. The map also distinguishes retained relay-v1 migration code and automated evidence paths.
 
 ## Real-world qualification
 

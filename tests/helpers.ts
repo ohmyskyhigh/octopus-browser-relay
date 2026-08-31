@@ -1,6 +1,6 @@
 import { generateKeyPairSync, type KeyObject } from 'node:crypto';
-import type { AgentPrincipal } from '../packages/protocol/src/index.js';
-import type { SqliteRelayStore } from '../packages/storage/src/index.js';
+import type { AgentPrincipal } from '../apps/shared/protocol/src/index.js';
+import type { SqliteRelayStore } from '../apps/broker/src/storage/index.js';
 
 export function testPrincipal(store: SqliteRelayStore, name = 'agent', scopes = ['targets:read', 'sessions:write', 'browser:read', 'browser:write']): { principal: AgentPrincipal; token: string } {
   return store.createAgent(name, scopes);

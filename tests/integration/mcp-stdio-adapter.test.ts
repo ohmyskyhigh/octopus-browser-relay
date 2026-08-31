@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { Client } from '@modelcontextprotocol/client';
 import { getDefaultEnvironment, StdioClientTransport } from '@modelcontextprotocol/client/stdio';
-import { createRelayApplication, type RelayApplication } from '../../apps/broker/src/bootstrap.js';
-import { resolveAdapterIdentity } from '../../packages/mcp-stdio-adapter/src/index.js';
-import { MCP_TOOL_NAMES } from '../../packages/protocol/src/index.js';
+import { createRelayApplication, type RelayApplication } from '../../apps/broker/src/runtime/bootstrap.js';
+import { resolveAdapterIdentity } from '../../apps/mcp-stdio-adapter/src/index.js';
+import { MCP_TOOL_NAMES } from '../../apps/shared/protocol/src/index.js';
 
 const TOKEN = 'stdio-adapter-integration-token-long-enough';
 
@@ -86,7 +86,7 @@ describe('stdio MCP session adapter', () => {
 async function connectAdapter(port: number, label: string): Promise<AdapterClient> {
   const transport = new StdioClientTransport({
     command: process.execPath,
-    args: ['--import', 'tsx', 'packages/mcp-stdio-adapter/src/main.ts'],
+    args: ['--import', 'tsx', 'apps/mcp-stdio-adapter/src/main.ts'],
     cwd: process.cwd(),
     env: {
       ...getDefaultEnvironment(),

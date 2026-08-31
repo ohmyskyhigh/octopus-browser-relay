@@ -2,7 +2,7 @@ import { generateKeyPairSync, randomUUID, sign } from 'node:crypto';
 import { afterEach, describe, expect, it } from 'vitest';
 import WebSocket from 'ws';
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
-import { createRelayApplication, type RelayApplication } from '../../apps/broker/src/bootstrap.js';
+import { createRelayApplication, type RelayApplication } from '../../apps/broker/src/runtime/bootstrap.js';
 import {
   MAX_RELAY_V2_ENVELOPE_BYTES,
   createRelayV2Envelope,
@@ -10,7 +10,7 @@ import {
   type RelayV2Envelope,
   type RelayV2MessageType,
   type RelayV2PayloadByType
-} from '../../packages/protocol/src/index.js';
+} from '../../apps/shared/protocol/src/index.js';
 
 const waitFor = async (condition: () => boolean | Promise<boolean>, timeoutMs = 8_000): Promise<void> => {
   const deadline = Date.now() + timeoutMs;
@@ -45,7 +45,7 @@ class SimulatedV2Extension {
     this.nextTabId = firstTabId;
   }
 
-  async pair(url: string, pairingCode: string): Promise<void> {
+  async pair(url: string, proposedNickname: string, pairingCode: string): Promise<void> {
     const keys = generateKeyPairSync('ec', { namedCurve: 'P-256' });
     const publicKeyJwk = keys.publicKey.export({ format: 'jwk' }) as RelayV2PayloadByType['HELLO']['publicKeyJwk'];
     this.socket = new WebSocket(url);
@@ -58,7 +58,7 @@ class SimulatedV2Extension {
     this.send('HELLO', {
       publicKeyJwk,
       pairingCode,
-      proposedNickname: `fixture-${this.marker}`,
+      proposedNickname,
       extensionVersion: '0.3.0-test',
       browser: { product: 'Chrome', version: '140.0.0.0', userAgent: null },
       supportedProtocolVersions: [2],
@@ -73,7 +73,7 @@ class SimulatedV2Extension {
     this.send('HELLO', {
       endpointId: this.endpointId,
       publicKeyJwk,
-      proposedNickname: `fixture-${this.marker}`,
+      proposedNickname,
       extensionVersion: '0.3.0-test',
       browser: { product: 'Chrome', version: '140.0.0.0', userAgent: null },
       supportedProtocolVersions: [2],
@@ -341,11 +341,10 @@ describe('multi-agent / multi-extension canonical real transport path', () => {
     await app.start();
     const mcpPort = app.mcpGateway.address().port;
     const relayPort = app.extensionGateway.address().port;
-    const aliases = ['profile-a', 'profile-b', 'profile-c'];
-    const admin = app.store.authenticateAgent(adminToken)!;
+    const aliases = ['mintwave', 'calmreef', 'brightstar'];
+    const pairingCodes = ['MINT-WAVE', 'CALM-REEF', 'BRIGHT-STAR'];
 
     for (const [index, alias] of aliases.entries()) {
-      const pairing = app.legacyBroker.createPairingCode(admin, alias, 60_000);
       const extension = new SimulatedV2Extension(
         `fixture-${String.fromCharCode(65 + index)}`,
         100 + index,
@@ -353,7 +352,7 @@ describe('multi-agent / multi-extension canonical real transport path', () => {
         300 + index * 10
       );
       extensions.push(extension);
-      await extension.pair(`ws://127.0.0.1:${relayPort}/relay`, pairing.pairingCode);
+      await extension.pair(`ws://127.0.0.1:${relayPort}/relay`, alias, pairingCodes[index]!);
     }
     await waitFor(() => aliases.every((alias) => {
       const endpoint = app!.store.canonical.logical.getEndpointByNickname(alias);

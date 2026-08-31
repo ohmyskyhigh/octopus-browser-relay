@@ -5,8 +5,8 @@ import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
 import { afterEach, describe, expect, it } from 'vitest';
 
 const workspace = resolve('.');
-const stopScript = resolve('scripts/stop-local-broker.ps1');
-const sourceBrokerEntry = resolve('apps/broker/src/main.ts');
+const stopScript = resolve('tools/stop-local-broker.ps1');
+const sourceBrokerEntry = resolve('apps/broker/src/runtime/main.ts');
 const temporaryRoots: string[] = [];
 const children: ChildProcess[] = [];
 

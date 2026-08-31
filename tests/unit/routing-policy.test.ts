@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { RoutingPolicy } from '../../packages/broker-core/src/index.js';
-import type { RequestContext, TargetSnapshot } from '../../packages/protocol/src/index.js';
+import { RoutingPolicy } from '../../apps/broker/src/core/index.js';
+import type { RequestContext, TargetSnapshot } from '../../apps/shared/protocol/src/index.js';
 
 const snapshot = (overrides: Partial<TargetSnapshot> = {}): TargetSnapshot => ({
   targetId: 'target-private',

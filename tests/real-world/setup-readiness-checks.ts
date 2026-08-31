@@ -71,7 +71,7 @@ export function inspectMcpHandoffs(paths: McpHandoffPaths): ReadinessCheck[] {
     checks.push(actionRequired(
       'mcp_registration_handoffs',
       `Generated MCP registration handoff files are missing or empty: ${missing.join(', ')}.`,
-      'Run scripts/install-local.ps1 -Install to regenerate the Codex and Hermes handoffs.'
+      'Run tools/install-local.ps1 -Install to regenerate the Codex and Hermes handoffs.'
     ));
     return checks;
   }
@@ -98,7 +98,7 @@ export function inspectMcpHandoffs(paths: McpHandoffPaths): ReadinessCheck[] {
     checks.push(actionRequired(
       'mcp_registration_handoffs',
       'Generated MCP registration handoffs do not match the selected adapter, broker URL, token file, or agent runtimes.',
-      'Rerun scripts/install-local.ps1 -Install with the intended parameterized paths.'
+      'Rerun tools/install-local.ps1 -Install with the intended parameterized paths.'
     ));
   } else {
     checks.push(ready(
@@ -153,7 +153,7 @@ export function inspectNativeRegistrations(
     return actionRequired(
       'native_host_registry',
       `Native Messaging registration is missing or stale under: ${mismatches.map(({ root }) => root).join(', ')}.`,
-      'Rerun scripts/install-local.ps1 -Install with the same -NativeRegistryRoots values.'
+      'Rerun tools/install-local.ps1 -Install with the same -NativeRegistryRoots values.'
     );
   }
   return ready(

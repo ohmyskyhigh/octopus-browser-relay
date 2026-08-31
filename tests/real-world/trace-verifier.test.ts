@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import type { StoredCommand, StoredTraceEvent } from '../../packages/storage/src/index.js';
+import type { StoredCommand, StoredTraceEvent } from '../../apps/broker/src/storage/index.js';
 import type { RealWorldRunManifest } from './run-manifest.schema.js';
 import { verifyRealWorldRun } from './trace-verifier.js';
 
 const manifest: RealWorldRunManifest = {
   runId: 'rw-test-0001', createdAt: new Date().toISOString(), brokerVersion: '0.2.0', extensionVersion: '0.1.0', protocolVersion: 1,
   dbPath: 'test.sqlite', adminTokenFile: 'admin-token.txt', mcpUrl: 'http://127.0.0.1:7331/mcp', relayUrl: 'ws://127.0.0.1:7332/relay',
-  fixtureBaseUrl: 'http://127.0.0.1:7340', extensionPath: 'apps/extension/dist',
+  fixtureBaseUrl: 'http://127.0.0.1:7340', extensionPath: 'dist/browser-extension',
   targets: ['A', 'B', 'C'].map((letter) => ({ alias: `rw-profile-${letter.toLowerCase()}`, marker: `fixture-${letter}`, fixtureUrl: `http://127.0.0.1:7340/fixture/${letter}` })),
   agents: ['A', 'B', 'C'].map((role, index) => ({
     role: role as 'A' | 'B' | 'C',

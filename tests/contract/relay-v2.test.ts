@@ -13,7 +13,7 @@ import {
   relayV2PayloadSchemas,
   selectCapabilityManifest,
   supportsCdpMethod
-} from '../../packages/protocol/src/index.js';
+} from '../../apps/shared/protocol/src/index.js';
 
 const endpointId = 'b3d3d5b8-480b-4dcc-802c-e1412a3f199a';
 const attemptId = '6b467585-b09c-43f6-a8ca-14bf9606957c';
@@ -46,6 +46,29 @@ describe('relay protocol version 2', () => {
 
     expect(parseRelayV2Envelope(envelope)).toEqual(envelope);
     expect(JSON.stringify(envelope)).not.toMatch(/workspace_ref|tab_ref|request_ref|session_ref/);
+  });
+
+  it('requires an extension-generated readable code only for first registration', () => {
+    const firstHello = createRelayV2Envelope('HELLO', {
+      publicKeyJwk: { kty: 'EC', crv: 'P-256', x: 'x-value', y: 'y-value' },
+      pairingCode: 'MINT-WAVE',
+      proposedNickname: 'mintwave',
+      extensionVersion: '0.3.0',
+      browser: { product: 'Chrome', version: '140.0.0.0', userAgent: null },
+      supportedProtocolVersions: [2],
+      capabilityManifestIds: ['octopus-extension-baseline-v1'],
+      maxEnvelopeBytes: MAX_RELAY_V2_ENVELOPE_BYTES
+    });
+    expect(parseRelayV2Envelope(firstHello).type).toBe('HELLO');
+    expect(() => createRelayV2Envelope('HELLO', {
+      publicKeyJwk: { kty: 'EC', crv: 'P-256', x: 'x-value', y: 'y-value' },
+      proposedNickname: 'octopus-missing-code',
+      extensionVersion: '0.3.0',
+      browser: { product: 'Chrome', version: '140.0.0.0', userAgent: null },
+      supportedProtocolVersions: [2],
+      capabilityManifestIds: ['octopus-extension-baseline-v1'],
+      maxEnvelopeBytes: MAX_RELAY_V2_ENVELOPE_BYTES
+    })).toThrow();
   });
 
   it('requires every CDP mutation to carry expected private generations', () => {

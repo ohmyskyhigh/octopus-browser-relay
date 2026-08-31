@@ -2,25 +2,25 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   createRelayV2Envelope,
   type RelayV2Envelope
-} from '../../packages/protocol/src/relay/v2-messages.js';
+} from '../../apps/shared/protocol/src/relay/v2-messages.js';
 import {
   BrowserInventory,
   type BrowserInventoryApi
-} from '../../apps/extension/src/browser/inventory.js';
+} from '../../apps/browser-extension/src/browser/inventory.js';
 import {
   DebuggerAttachmentManager,
   type DebuggerApi
-} from '../../apps/extension/src/debugger/attachment-manager.js';
-import { CdpExecutor } from '../../apps/extension/src/debugger/cdp-executor.js';
-import { CdpEventForwarder } from '../../apps/extension/src/debugger/event-forwarder.js';
+} from '../../apps/browser-extension/src/debugger/attachment-manager.js';
+import { CdpExecutor } from '../../apps/browser-extension/src/debugger/cdp-executor.js';
+import { CdpEventForwarder } from '../../apps/browser-extension/src/debugger/event-forwarder.js';
 import {
   RelayDispatcher,
   type RelayDispatcherDependencies
-} from '../../apps/extension/src/protocol/dispatcher.js';
+} from '../../apps/browser-extension/src/protocol/dispatcher.js';
 import {
   RecentAttemptCache,
   type LocalStorageArea
-} from '../../apps/extension/src/executor/recent-command-cache.js';
+} from '../../apps/browser-extension/src/executor/recent-command-cache.js';
 
 class MemoryStorage implements LocalStorageArea {
   readonly data: Record<string, unknown> = {};

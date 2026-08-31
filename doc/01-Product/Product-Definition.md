@@ -52,13 +52,15 @@ The promise includes the confirmed workspace and managed-tab targeting rules. It
 
 ### Each participating browser profile becomes one uniquely named extension endpoint
 
-Every browser profile used with Octopus installs a distinct Octopus extension instance. The instance generates an endpoint nickname, and successful pairing registers that extension instance and browser profile as one endpoint in the local broker.
+Every browser profile used with Octopus installs a distinct Octopus extension instance. The instance randomly selects two short English words as a readable pairing code and combines those words into a compact lowercase endpoint nickname without a numeric suffix, such as pairing code `MINT-WAVE` and nickname `mintwave`. It persists that label alongside its separate cryptographic profile identity. On its first connection to the local broker, the extension registers itself automatically as one browser-profile endpoint; the human does not obtain or enter a broker-generated code.
 
-The nickname is unique among endpoints registered with the same local broker. A pairing attempt with a duplicate nickname does not complete.
+The readable pairing code helps the human correlate an installed extension with its broker endpoint. It is not the reconnect credential or an authorization secret. The extension persists a separate cryptographic profile identity, and the broker authenticates later connections against that identity.
+
+The nickname is unique among endpoints registered with the same local broker. If a newly generated nickname collides with another profile identity, the extension generates another two-word label and retries registration automatically.
 
 ### Pairing makes browser capacity discoverable without assigning it permanently to an agent
 
-Pairing makes an extension endpoint available for discovery. Known paired endpoints remain discoverable with their current condition even when they cannot accept a workspace. Pairing does not hard-bind an endpoint to an agent.
+Automatic pairing makes an extension endpoint available for discovery. Known paired endpoints remain discoverable with their current condition even when they cannot accept a workspace. Pairing does not hard-bind an endpoint to an agent.
 
 An agent may request a workspace on a designated endpoint or ask Octopus to assign one. The broker establishes and records the resulting workspace binding at session time. A requested workspace count means that many distinct browser profiles and endpoints; the same profile or endpoint cannot satisfy the count more than once.
 

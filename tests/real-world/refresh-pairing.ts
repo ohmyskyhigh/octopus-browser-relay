@@ -1,6 +1,6 @@
 import { chmodSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { SqliteRelayStore } from '../../packages/storage/src/index.js';
+import { SqliteRelayStore } from '../../apps/broker/src/storage/index.js';
 import { RealWorldRunManifestSchema } from './run-manifest.schema.js';
 
 const argument = (name: string): string | undefined => {

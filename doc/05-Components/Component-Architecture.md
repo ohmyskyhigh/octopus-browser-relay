@@ -10,14 +10,14 @@ Components are operational owners of confirmed System responsibilities. They may
 
 | Component | Repository owner | Primary responsibility |
 | --- | --- | --- |
-| Broker Runtime | `apps/broker` | Process composition, validated configuration, lifecycle, health, and dependency wiring |
-| MCP Gateway | `packages/mcp-gateway` | Codex/Hermes transport adapters, caller evidence, fourteen tools, schema publication, and acknowledgement-delivery confirmation |
-| Broker Core | `packages/broker-core` | Logical identity, authority, admission, routing, request lifecycle, scheduling, reconciliation, controls, status, and audit decisions |
-| Durable Store | `packages/storage` | Atomic persistence, migrations, repositories, request/event/audit retention, and restart recovery queries |
-| Extension Gateway | `packages/extension-gateway` and `apps/native-host` | Pairing transport, authenticated live connections, bounded framing, generation fencing, and extension message correlation |
-| Browser Extension | `apps/extension` | Profile identity, user-visible pairing, browser observation, tab-group operations, `chrome.debugger` attachment, raw CDP execution, and event forwarding |
-| Protocol Contract | `packages/protocol` | MCP wire schemas, domain value types, relay envelopes, capability manifests, public problems, and protocol versions |
-| Setup and Qualification | `scripts` and `tests` | Installation, runtime registration, builds, fixtures, conformance, real-world scenarios, traces, and release evidence |
+| Broker Runtime | `apps/broker/src/runtime` | Process composition, validated configuration, lifecycle, health, and dependency wiring |
+| MCP Gateway | `apps/broker/src/mcp` and `apps/mcp-stdio-adapter` | Codex/Hermes transport adapters, caller evidence, fourteen tools, schema publication, and acknowledgement-delivery confirmation |
+| Broker Core | `apps/broker/src/core` | Logical identity, authority, admission, routing, request lifecycle, scheduling, reconciliation, controls, status, and audit decisions |
+| Durable Store | `apps/broker/src/storage` | Atomic persistence, migrations, repositories, request/event/audit retention, and restart recovery queries |
+| Extension Gateway | `apps/broker/src/extension-relay` and `apps/native-host` | Automatic relay-v2 endpoint registration, authenticated live connections, bounded framing, generation fencing, and extension message correlation |
+| Browser Extension | `apps/browser-extension` | Profile identity, readable pairing code and automatic registration, browser observation, tab-group operations, `chrome.debugger` attachment, raw CDP execution, and event forwarding |
+| Protocol Contract | `apps/shared/protocol` | MCP wire schemas, domain value types, relay envelopes, capability manifests, public problems, and protocol versions shared by runtime apps |
+| Setup and Qualification | `tools` and `tests` | Installation, runtime registration, builds, fixtures, conformance, real-world scenarios, traces, and release evidence |
 
 ### Dependencies point inward toward contracts and broker decisions
 
@@ -43,6 +43,12 @@ flowchart TD
 ```
 
 Broker Core cannot depend on MCP, WebSocket, Native Messaging, Chrome APIs, or process-global configuration. Gateways translate transports into Broker Core ports. Durable Store implements repository ports and does not make routing or lifecycle decisions.
+
+### Physical nesting makes the owning application visible from every source path
+
+Broker Runtime, MCP Gateway, Broker Core, Durable Store, and Extension Gateway are separately governed components inside the `apps/broker` deployable. Their source modules are nested beneath that app because they ship and run as one broker process.
+
+Browser Extension, Native Host, and MCP stdio adapter remain separate app directories because each produces an independently launched or loaded artifact. Protocol Contract is the sole shared source subtree because the broker, extension, and stdio adapter consume the same versioned wire definitions. Generated artifacts never live inside these source owners; root `dist/` contains every build product.
 
 ## Broker Runtime
 
@@ -136,9 +142,11 @@ Read-model queries implement bounded context and ticket-discovery pages with que
 
 ## Extension Gateway
 
-### Extension Gateway authenticates one live generation per paired endpoint
+### Extension Gateway registers first connections and authenticates later generations
 
-The gateway completes pairing, validates persisted endpoint credentials, negotiates relay-protocol and capability versions, and registers one current connection generation. A replacement connection fences the older generation before it can return results.
+For an unpaired relay-v2 extension, the gateway validates the two-word code format, proposed nickname, profile public key, and negotiated capability manifest, then asks the broker to register the endpoint automatically. The readable code supports human correlation and does not grant authority. A duplicate nickname belonging to another profile key returns the retryable `ENDPOINT_NICKNAME_CONFLICT` relay error so the extension can choose another two-word label.
+
+After registration, the gateway validates the persisted endpoint identity through challenge authentication, negotiates relay-protocol and capability versions, and registers one current connection generation. A replacement connection fences the older generation before it can return results. Relay-v1 broker-generated one-time codes remain migration-only behavior and are not part of the current installation journey.
 
 Connection presence is a fact sent to Broker Core. Gateway never derives `usable`, `busy`, `failing`, workspace ownership, or retry policy itself.
 
@@ -154,11 +162,11 @@ Private relay message and command-attempt identifiers correlate extension acknow
 
 ## Browser Extension
 
-### Each profile-local extension persists one pairing identity and readable nickname
+### Each profile-local extension persists one identity, readable code, and nickname
 
-The extension creates a cryptographic pairing identity and nickname candidate in profile-local extension storage. It exposes pairing, reset, final nickname, Native Messaging readiness, and connection status in the options page.
+The extension creates a cryptographic profile identity in profile-local extension storage, randomly selects and persists two short English words, combines them into a lowercase nickname without separators or digits, and starts automatic registration when the local transport connects. The options page displays the hyphenated two-word code, proposed or final nickname, Native Messaging readiness, and connection status without accepting a pairing-code input. Before pairing completes, a nickname-conflict response replaces only the readable label and retries; it does not replace the cryptographic identity.
 
-Ordinary service-worker or browser restart preserves identity. Reset, reinstall, or re-pair creates a new identity and cannot inherit old logical workspaces.
+Ordinary service-worker or browser restart preserves the identity, code, and endpoint. Reset, reinstall, or re-pair creates a new identity, code, and nickname candidate and cannot inherit old logical workspaces.
 
 ### Browser inventory reconciliation precedes managed-tab mutation
 
@@ -197,7 +205,7 @@ The manifest describes scope and support; Browser Extension executes. Broker Cor
 
 ### Installation scripts are idempotent and report explicit readiness
 
-Setup scripts build artifacts, register the native host, register MCP configuration for Codex and Hermes, print extension load paths, verify broker health, and guide pairing. Re-running them repairs matching configuration without deleting pairing or workspace state unless reset is explicitly requested.
+Setup scripts build artifacts, register the native host, register MCP configuration for Codex and Hermes, print extension load paths, verify broker health, and explain automatic extension pairing. They do not issue or ask the human to enter a pairing code. Re-running them repairs matching configuration without deleting pairing or workspace state unless reset is explicitly requested.
 
 Runtime-specific templates remain separate from agent-visible MCP schemas.
 

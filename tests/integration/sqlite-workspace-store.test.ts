@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { afterEach, describe, expect, it } from 'vitest';
-import { SqliteRelayStore } from '../../packages/storage/src/index.js';
+import { SqliteRelayStore } from '../../apps/broker/src/storage/index.js';
 
 const roots: string[] = [];
 
@@ -59,7 +59,7 @@ describe('canonical SQLite workspace store', () => {
     const raw = new DatabaseSync(path);
     for (let version = 1; version <= 3; version += 1) {
       const filename = version === 1 ? '001-initial.sql' : version === 2 ? '002-real-world-trace.sql' : '003-agent-target-bindings.sql';
-      raw.exec(readFileSync(new URL(`../../packages/storage/src/sqlite/migrations/${filename}`, import.meta.url), 'utf8'));
+      raw.exec(readFileSync(new URL(`../../apps/broker/src/storage/sqlite/migrations/${filename}`, import.meta.url), 'utf8'));
       raw.prepare('INSERT INTO schema_migrations(version,applied_at) VALUES(?,?)').run(version, new Date().toISOString());
     }
     const at = new Date().toISOString();

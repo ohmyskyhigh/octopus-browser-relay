@@ -14,7 +14,7 @@ import {
   safeParseMcpToolInput,
   safeParseMcpToolOutput,
   type McpToolName
-} from '../../packages/protocol/src/index.js';
+} from '../../apps/shared/protocol/src/index.js';
 
 const refs = {
   session: 'session-ref',

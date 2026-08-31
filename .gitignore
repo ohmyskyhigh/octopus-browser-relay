@@ -1,6 +1,5 @@
 node_modules/
 dist/
-apps/extension/dist/
 .relay-data/
 artifacts/real-world/*
 !artifacts/real-world/.gitignore

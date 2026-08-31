@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
-import { SqliteRelayStore } from '../../packages/storage/src/index.js';
+import { SqliteRelayStore } from '../../apps/broker/src/storage/index.js';
 import { RealWorldRunManifestSchema, type RealWorldRunManifest } from './run-manifest.schema.js';
 
 const arg = (name: string, fallback?: string): string | undefined => {
@@ -19,7 +19,7 @@ if (existsSync(manifestPath)) {
 }
 
 const dbPath = resolve(arg('db', '.relay-data/relay.sqlite')!);
-const extensionPath = resolve('apps/extension/dist');
+const extensionPath = resolve('dist/browser-extension');
 if (!existsSync(resolve(extensionPath, 'manifest.json'))) throw new Error('Extension build is missing. Run pnpm build:extension first.');
 mkdirSync(root, { recursive: true });
 mkdirSync(resolve(root, 'credentials'), { recursive: true });

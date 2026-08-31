@@ -3,10 +3,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
 import { McpServer, createMcpHandler, fromJsonSchema } from '@modelcontextprotocol/server';
 import { toNodeHandler } from '@modelcontextprotocol/node';
-import type { CallerEvidence, OctopusBroker } from '../../packages/broker-core/src/index.js';
-import { McpGateway } from '../../packages/mcp-gateway/src/index.js';
-import { MCP_TOOL_NAMES, type McpAsyncToolName } from '../../packages/protocol/src/index.js';
-import type { RelayRepositories } from '../../packages/storage/src/index.js';
+import type { CallerEvidence, OctopusBroker } from '../../apps/broker/src/core/index.js';
+import { McpGateway } from '../../apps/broker/src/mcp/index.js';
+import { MCP_TOOL_NAMES, type McpAsyncToolName } from '../../apps/shared/protocol/src/index.js';
+import type { RelayRepositories } from '../../apps/broker/src/storage/index.js';
 
 const TOKEN = 'canonical-mcp-gateway-test-token';
 const NOW = '2026-08-31T00:00:00.000Z';

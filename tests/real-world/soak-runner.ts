@@ -1,7 +1,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
-import { SqliteRelayStore } from '../../packages/storage/src/index.js';
+import { SqliteRelayStore } from '../../apps/broker/src/storage/index.js';
 import { RealWorldRunManifestSchema, type RealWorldRunManifest } from './run-manifest.schema.js';
 import { verifyRealWorldRun } from './trace-verifier.js';
 

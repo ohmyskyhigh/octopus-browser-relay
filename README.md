@@ -60,7 +60,7 @@ From the repository root, run:
 
 ```powershell
 corepack enable
-pwsh -NoProfile -File .\scripts\install-local.ps1 -Install -StartBroker
+pwsh -NoProfile -File .\tools\install-local.ps1 -Install -StartBroker
 ```
 
 The installer runs the frozen pnpm install and build unless skip switches are supplied, verifies the compiled stdio MCP adapter, registers `io.github.ohmyskyhigh.octopus_browser_relay` for the current Windows user under Google Chrome, Chromium, and the installed AdsPower/SunBrowser registry roots, migrates an attributable prototype registration, optionally starts the compiled broker, and creates these local handoff files:
@@ -79,11 +79,11 @@ It does not overwrite Codex or Hermes configuration. It also leaves browser-prof
 With the broker running, execute either readiness entry point:
 
 ```powershell
-pwsh -NoProfile -File .\scripts\install-local.ps1
+pwsh -NoProfile -File .\tools\install-local.ps1
 ```
 
 ```powershell
-pwsh -NoProfile -File .\scripts\real-world-preflight.ps1
+pwsh -NoProfile -File .\tools\real-world-preflight.ps1
 ```
 
 The check verifies the workspace, built extension files, required manifest declarations, native executable, compiled stdio adapter, Native Messaging manifest, every configured Native Messaging registry value, generated pairing and MCP handoff files, and both health endpoints. It exits with code `10` when operator action is still required. Pass the same `-NativeRegistryRoots` values to installation and preflight when a browser build uses different roots.
@@ -93,7 +93,7 @@ The check verifies the workspace, built extension files, required manifest decla
 An installer-started broker records its process ID in `.relay-data/broker.pid`. Stop it with:
 
 ```powershell
-pwsh -NoProfile -File .\scripts\stop-local-broker.ps1
+pwsh -NoProfile -File .\tools\stop-local-broker.ps1
 ```
 
 The command inspects the recorded Windows process and stops it only when it is `node.exe` running this workspace's absolute compiled broker entry point. A missing PID file is a successful no-op; a stale PID is retained for inspection; a process mismatch is rejected without stopping anything or deleting the PID file. Use `Ctrl+C` for a foreground `pnpm dev` broker.
@@ -109,31 +109,23 @@ pnpm build:extension
 pnpm dev
 ```
 
-`pnpm dev` runs `apps/broker/src/main.ts` through `tsx`. Rebuild and reload `apps/extension/dist` after extension source changes.
+`pnpm dev` runs `apps/broker/src/runtime/main.ts` through `tsx`. Rebuild and reload `dist/browser-extension` after extension source changes.
 
 ## Browser profile pairing
 
-### Every browser profile loads and pairs its own extension instance
+### Every browser profile loads and pairs its own extension instance automatically
 
 Repeat these steps inside each Chrome or AdsPower profile that the broker should control:
 
 1. Open `chrome://extensions`.
 2. Enable **Developer mode**.
-3. Choose **Load unpacked** and select `apps/extension/dist`.
+3. Choose **Load unpacked** and select `dist/browser-extension`.
 4. Confirm the extension ID is `caekiojlchhifdomfghejkbfpmaklafe`.
-5. Open **Octopus Browser Relay Settings** and note the profile-local nickname.
-6. In the repository, create a short-lived pairing code for that nickname:
+5. Open **Octopus Browser Relay Settings**. The extension displays its two-word profile-local pairing code and compact combined nickname, such as `MINT-WAVE` and `mintwave`.
+6. Keep **Native companion** selected and choose **Save connection settings** if you changed the transport or relay URL.
+7. Wait until the extension reports `Status: connected` with the final endpoint nickname.
 
-   ```powershell
-   pnpm pair --nickname "<displayed nickname>"
-   ```
-
-   The optional switches are `--expires-minutes <1-1440>` and `--db <path-to-relay.sqlite>`.
-
-7. Keep **Native companion** selected, enter the returned eight-character code, and choose **Save and connect**.
-8. Wait until the extension reports `Status: connected` with the final endpoint nickname.
-
-The code is one-use and defaults to a ten-minute lifetime. Generate a separate code and nickname for every profile; the broker returns the final nickname when pairing completes.
+The extension generates the readable code and registers itself with the running loopback broker; there is no broker-code command and no code-entry field. A nickname collision makes the unpaired extension choose another pair of words and retry automatically. The readable code helps correlate this profile with its endpoint and is not an authorization secret. Reconnect authentication uses the profile's persisted cryptographic identity. Repeat the load-and-connect steps in every participating profile.
 
 ### Direct WebSocket stays available for explicit diagnostics
 
@@ -143,7 +135,7 @@ The extension options page can connect directly to `ws://127.0.0.1:7332/relay`, 
 
 ### The installer generates a Codex stdio MCP configuration fragment
 
-Merge `.relay-data/bootstrap/codex-mcp.toml` into the active Codex `config.toml`, then start a new Codex session. The generated fragment launches Node with `dist/packages/mcp-stdio-adapter/src/main.js` and passes the broker URL, token-file path, and `codex` runtime label as process environment.
+Merge `.relay-data/bootstrap/codex-mcp.toml` into the active Codex `config.toml`, then start a new Codex session. The generated fragment launches Node with `dist/mcp-stdio-adapter/src/main.js` and passes the broker URL, token-file path, and `codex` runtime label as process environment.
 
 The token remains in `.relay-data/admin-token.txt`; the generated fragment points to that file instead of embedding the token. The repository does not choose or modify the active Codex configuration file.
 
@@ -193,7 +185,7 @@ The adapter forwards these facts to the HTTP broker as `x-octopus-runtime`, `x-o
 
 Every asynchronous tool returns an accepted `request_ref` before its browser effect becomes eligible for dispatch. The agent polls that reference with `get_browser_request`. The exact request and result schemas live in [MCP-Contract.schema.json](./doc/03-User-Interface/MCP-Contract.schema.json).
 
-The current extension capability baseline is [extension-baseline.json](./packages/protocol/capabilities/extension-baseline.json). It includes selected Accessibility, DOM, Emulation, Input, Network, Page, and Runtime methods, all confined to a managed tab.
+The current extension capability baseline is [extension-baseline.json](./apps/shared/protocol/capabilities/extension-baseline.json). It includes selected Accessibility, DOM, Emulation, Input, Network, Page, and Runtime methods, all confined to a managed tab.
 
 ## Local endpoints and state
 
@@ -208,7 +200,7 @@ The current extension capability baseline is [extension-baseline.json](./package
 
 The broker creates the token on first start when `RELAY_ADMIN_TOKEN` is unset. `.relay-data/` is ignored by Git.
 
-Supported environment variables are `RELAY_HOST`, `RELAY_MCP_PORT`, `RELAY_WS_PORT`, `RELAY_DB_PATH`, `RELAY_LOG_LEVEL`, `RELAY_HEARTBEAT_TIMEOUT_MS`, `RELAY_ERROR_THRESHOLD`, `RELAY_LEASE_TTL_MS`, and `RELAY_ADMIN_TOKEN`. Their validated defaults are defined in `apps/broker/src/config.ts`.
+Supported environment variables are `RELAY_HOST`, `RELAY_MCP_PORT`, `RELAY_WS_PORT`, `RELAY_DB_PATH`, `RELAY_LOG_LEVEL`, `RELAY_HEARTBEAT_TIMEOUT_MS`, `RELAY_ERROR_THRESHOLD`, `RELAY_LEASE_TTL_MS`, and `RELAY_ADMIN_TOKEN`. Their validated defaults are defined in `apps/broker/src/runtime/config.ts`.
 
 ## Verification
 
@@ -241,17 +233,14 @@ pnpm build
 
 ```text
 doc/                    Top-down knowledge vault and change governance
-apps/broker/            Broker process composition and configuration
-apps/extension/         Manifest V3 extension source and built unpacked output
+apps/broker/            Broker runtime, core, MCP, relay, and storage source
+apps/browser-extension/ Manifest V3 extension source
+apps/mcp-stdio-adapter/ Session-owned stdio bridge for Codex and Hermes
 apps/native-host/       Windows Native Messaging companion source
-packages/broker-core/   Workspace, ticket, routing, recovery, and control policy
-packages/extension-gateway/  Relay-v1/v2 connection and message gateway
-packages/mcp-gateway/   Authenticated fourteen-tool Streamable HTTP MCP server
-packages/mcp-stdio-adapter/  Session-owned stdio bridge for Codex and Hermes
-packages/protocol/      MCP schemas, relay schemas, domain facts, and capabilities
-packages/storage/       SQLite repositories and migrations
-scripts/                Build, install, pairing, preflight, and test automation
+apps/shared/protocol/   MCP schemas, relay schemas, domain facts, and capabilities
+tools/                  Build, install, pairing, preflight, and test automation
 tests/                  Contract, unit, integration, fault, E2E, and physical tests
+dist/                   Generated broker, adapter, extension, and native artifacts
 ```
 
 Start with the [top-down vault map](./doc/TOP-DOWN-MOC.md) for project knowledge and the [repository map](./doc/06-Files/Repository-Map.md) for exact implementation paths.

@@ -1,4 +1,4 @@
-import type { StoredCommand, StoredTraceEvent } from '../../packages/storage/src/index.js';
+import type { StoredCommand, StoredTraceEvent } from '../../apps/broker/src/storage/index.js';
 import type { RealWorldRunManifest } from './run-manifest.schema.js';
 
 export interface VerificationFinding {

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { installReconnectAlarm, type RelayAlarmApi } from '../../apps/extension/src/reconnect-alarm.js';
+import { installReconnectAlarm, type RelayAlarmApi } from '../../apps/browser-extension/src/reconnect-alarm.js';
 
 describe('reconnect alarm compatibility', () => {
   it('does not throw when a Chromium derivative omits chrome.alarms', async () => {

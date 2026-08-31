@@ -10,7 +10,7 @@ This architecture realizes the confirmed Product, User Experience, and MCP contr
 
 Agents call one MCP boundary. The broker owns endpoint registration, caller and lineage resolution, logical windows, workspaces, managed tabs, request tickets, routing, status, scheduling, event cursors, recovery decisions, and logs.
 
-Each browser profile installs one extension instance. The instance pairs with the broker as one uniquely named endpoint and executes the broker's extension-supported CDP subset through `chrome.debugger`. Neither agent nor extension assigns logical ownership or selects a private Chrome target directly.
+Each browser profile installs one extension instance. On first connection the instance presents its randomly generated two-word pairing code, the compact lowercase nickname formed from those words, and its cryptographic profile identity; the loopback broker registers it automatically as one uniquely named endpoint. A nickname collision returns a retryable relay error, after which the still-unpaired extension selects another two-word label and reconnects without changing its cryptographic identity. The code is a correlation label rather than an authentication secret. Later connections prove the persisted profile identity through broker challenge authentication. The paired extension executes the broker's extension-supported CDP subset through `chrome.debugger`. Neither agent nor extension assigns logical ownership or selects a private Chrome target directly.
 
 ### Public references are separated from replaceable browser locators
 
@@ -52,7 +52,7 @@ The broker runs as one local service. MCP adapters, extension connections, worke
 
 ### Installation prepares both agent runtimes and each browser profile
 
-Scripted installation builds the broker and extension, registers the MCP server for Codex and Hermes, installs the Native Messaging host, and verifies local readiness. Each intended Chrome or AdsPower profile loads its own extension and completes pairing.
+Scripted installation builds the broker and extension, registers the MCP server for Codex and Hermes, installs the Native Messaging host, and verifies local readiness. Each intended Chrome or AdsPower profile loads its own extension, which generates its readable code and registers automatically when the running broker is reachable. Installation provides no broker-code issuance or user-entry step.
 
 Installation reports one explicit unmet prerequisite at a time. It does not become an agent-visible browser-automation tool.
 
@@ -233,6 +233,7 @@ Durable audit retains request metadata, hashes, transitions, routing decisions, 
 
 - The broker is the sole issuer of Octopus references and cursors.
 - One paired extension identity represents one browser-profile endpoint.
+- A first relay-v2 connection carries an extension-generated two-word code, its combined lowercase nickname, and the profile key; automatic local registration retries with another two-word label after collision, precedes challenge-authenticated reconnects, and never treats the readable code as authorization.
 - Public commands never carry private Chrome routing identifiers.
 - Every async ticket is durable and delivered before its effect is eligible.
 - Rejected preconditions create no public ticket and no browser effect.
@@ -253,6 +254,6 @@ Durable audit retains request metadata, hashes, transitions, routing decisions, 
 
 Unit and contract tests prove schemas, policy, state machines, references, and invariants. Integration tests prove SQLite transactions, acknowledgement gating, worker claims, extension framing, attachment fencing, request polling, and restart recovery. End-to-end fixtures prove multi-agent, multi-profile, same-tab serialization, cross-tab concurrency, controls, and failure recovery.
 
-Real-world qualification uses Codex and Hermes sessions against separately paired Chrome and AdsPower profiles. Test-driven changes return through the owning vault level; executable behavior never silently establishes higher-level intent.
+Real-world qualification uses Codex and Hermes sessions against separately installed and automatically paired Chrome and AdsPower profiles. Test-driven changes return through the owning vault level; executable behavior never silently establishes higher-level intent.
 
 Parent: [`System MOC`](./_MOC.md).

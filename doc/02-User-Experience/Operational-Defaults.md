@@ -24,15 +24,15 @@ The broker publishes its current retention limits as status or capability facts.
 
 ## Endpoint continuity
 
-### A persisted pairing credential restores the same endpoint after ordinary reconnects
+### A persisted profile identity restores the same endpoint after ordinary reconnects
 
-Browser restart, extension service-worker restart, Native Messaging restart, and broker reconnect preserve the endpoint identity and nickname when the extension presents the same persisted pairing credential.
+Browser restart, extension service-worker restart, Native Messaging restart, and broker reconnect preserve the endpoint identity, readable pairing code, and nickname when the extension proves possession of the same persisted profile key.
 
 Reset pairing, explicit re-pair, or extension reinstall creates a new endpoint identity. It does not inherit old workspaces or routing merely because it proposes the same nickname.
 
-### Nickname collisions are resolved before pairing becomes active
+### Nickname collisions trigger another automatic two-word selection
 
-The extension proposes a readable nickname. If it is already active or reserved, the broker returns deterministic suffixed alternatives and the extension registers the first available alternative. The final nickname is shown to the human and agents.
+The extension proposes the compact nickname formed by combining its two generated words. If that nickname is already active or reserved for another profile identity, the broker returns a retryable conflict and the unpaired extension generates another two-word code and nickname before retrying automatically. The cryptographic profile identity remains unchanged during collision retry. Resetting pairing creates a new profile identity, code, and nickname candidate.
 
 A retired nickname remains reserved until its endpoint is explicitly revoked or the broker's local maintenance operation releases it. Reusing text never restores the retired endpoint identity.
 

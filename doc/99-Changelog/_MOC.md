@@ -4,6 +4,8 @@ This directory records applied changes to vault structure and canonical document
 
 ## Entries
 
+- [`2026-08-31-automatic-extension-pairing.md`](./2026-08-31-automatic-extension-pairing.md)
+- [`2026-08-31-app-owned-source-layout.md`](./2026-08-31-app-owned-source-layout.md)
 - [`2026-08-31-canonical-runtime-release-documentation.md`](./2026-08-31-canonical-runtime-release-documentation.md)
 - [`2026-08-31-canonical-architecture-components-files-and-plan.md`](./2026-08-31-canonical-architecture-components-files-and-plan.md)
 - [`2026-08-28-document-vault-structure.md`](./2026-08-28-document-vault-structure.md)

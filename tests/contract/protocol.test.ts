@@ -4,7 +4,7 @@ import {
   BindingRefSchema,
   createRelayEnvelope,
   parseRelayEnvelope
-} from '../../packages/protocol/src/index.js';
+} from '../../apps/shared/protocol/src/index.js';
 
 describe('protocol contracts', () => {
   it('requires exactly one safe selector', () => {

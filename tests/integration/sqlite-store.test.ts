@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { SqliteRelayStore } from '../../packages/storage/src/index.js';
+import { SqliteRelayStore } from '../../apps/broker/src/storage/index.js';
 import { testBinding, testPrincipal, testTarget } from '../helpers.js';
 
 describe('SQLite relay store', () => {
@@ -20,6 +20,24 @@ describe('SQLite relay store', () => {
     expect(target.alias).toBe('profile-a');
     expect(target.targetId).toMatch(/^[0-9a-f-]{36}$/);
     expect(() => store.consumePairingCode(code, {}, [])).toThrow('PAIRING_CODE_INVALID');
+  });
+
+  it('registers an extension identity automatically and rejects a nickname collision', () => {
+    const firstKey = { kty: 'EC', crv: 'P-256', x: 'profile-x', y: 'profile-y' };
+    const first = store.registerExtension('mintwave', firstKey, ['baseline-v1']);
+    const recovered = store.registerExtension(
+      'mintwave',
+      { y: 'profile-y', x: 'profile-x', crv: 'P-256', kty: 'EC' },
+      ['baseline-v1', 'updated-capability']
+    );
+
+    expect(recovered.targetId).toBe(first.targetId);
+    expect(recovered.capabilities).toEqual(['baseline-v1', 'updated-capability']);
+    expect(() => store.registerExtension(
+      'mintwave',
+      { kty: 'EC', crv: 'P-256', x: 'another-profile', y: 'another-key' },
+      ['baseline-v1']
+    )).toThrow('ENDPOINT_NICKNAME_CONFLICT');
   });
 
   it('rotates a revoked target pairing without changing its alias or private target identity', () => {

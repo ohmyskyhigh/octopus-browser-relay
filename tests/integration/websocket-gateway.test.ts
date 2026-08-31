@@ -1,8 +1,8 @@
 import { generateKeyPairSync, sign } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import WebSocket from 'ws';
-import { BrokerCore, OctopusBroker, type ExtensionEventSink } from '../../packages/broker-core/src/index.js';
-import { ExtensionGateway } from '../../packages/extension-gateway/src/index.js';
+import { BrokerCore, OctopusBroker, type ExtensionEventSink } from '../../apps/broker/src/core/index.js';
+import { ExtensionGateway } from '../../apps/broker/src/extension-relay/index.js';
 import {
   MAX_RELAY_V2_ENVELOPE_BYTES,
   createRelayEnvelope,
@@ -12,8 +12,8 @@ import {
   type RelayEnvelope,
   type RelayV2Envelope,
   type RelayV2PayloadByType
-} from '../../packages/protocol/src/index.js';
-import { SqliteRelayStore } from '../../packages/storage/src/index.js';
+} from '../../apps/shared/protocol/src/index.js';
+import { SqliteRelayStore } from '../../apps/broker/src/storage/index.js';
 
 function nextMessage(socket: WebSocket): Promise<RelayEnvelope> {
   return new Promise((resolve, reject) => {
@@ -144,8 +144,6 @@ describe('extension WebSocket gateway', () => {
   });
 
   it('pairs through relay v2, publishes inventory, and correlates private operations', async () => {
-    const admin = store.createAgent('admin-v2', ['broker:admin', 'browser:read', 'browser:write', 'sessions:write']);
-    const pairing = broker.createPairingCode(admin.principal, 'profile-v2', 60_000);
     const keys = generateKeyPairSync('ec', { namedCurve: 'P-256' });
     const publicKeyJwk = keys.publicKey.export({ format: 'jwk' }) as RelayV2PayloadByType['HELLO']['publicKeyJwk'];
     await gateway.start();
@@ -156,8 +154,8 @@ describe('extension WebSocket gateway', () => {
     const pairedMessage = nextV2Message(socket);
     socket.send(JSON.stringify(createRelayV2Envelope('HELLO', {
       publicKeyJwk,
-      pairingCode: pairing.pairingCode,
-      proposedNickname: 'octopus-test',
+      pairingCode: 'MINT-WAVE',
+      proposedNickname: 'mintwave',
       extensionVersion: '0.2.0',
       browser: { product: 'Chrome', version: '140.0.0.0', userAgent: null },
       supportedProtocolVersions: [2],
@@ -171,7 +169,7 @@ describe('extension WebSocket gateway', () => {
     socket.send(JSON.stringify(createRelayV2Envelope('HELLO', {
       endpointId: paired.payload.endpointId,
       publicKeyJwk,
-      proposedNickname: 'octopus-test',
+      proposedNickname: 'mintwave',
       extensionVersion: '0.2.0',
       browser: { product: 'Chrome', version: '140.0.0.0', userAgent: null },
       supportedProtocolVersions: [2],
@@ -195,7 +193,7 @@ describe('extension WebSocket gateway', () => {
     const ready = await readyMessage as RelayV2Envelope<'READY'>;
     expect(ready.type).toBe('READY');
 
-    const endpoint = store.canonical.logical.getEndpointByNickname('profile-v2');
+    const endpoint = store.canonical.logical.getEndpointByNickname('mintwave');
     expect(endpoint).not.toBeNull();
     expect(gateway.connection(endpoint!.endpointRef)).toMatchObject({
       connected: true,
@@ -307,9 +305,37 @@ describe('extension WebSocket gateway', () => {
       .toBe(replacementChallenge.payload.connectionGeneration);
   });
 
+  it('returns a retryable conflict so an unpaired extension can generate another two-word nickname', async () => {
+    store.registerExtension(
+      'mintwave',
+      { kty: 'EC', crv: 'P-256', x: 'existing-x', y: 'existing-y' },
+      ['octopus-extension-baseline-v1']
+    );
+    const keys = generateKeyPairSync('ec', { namedCurve: 'P-256' });
+    const publicKeyJwk = keys.publicKey.export({ format: 'jwk' }) as RelayV2PayloadByType['HELLO']['publicKeyJwk'];
+    await gateway.start();
+    const { port } = gateway.address();
+    socket = new WebSocket(`ws://127.0.0.1:${port}/relay`);
+    await new Promise<void>((resolve, reject) => { socket!.once('open', resolve); socket!.once('error', reject); });
+
+    const errorMessage = nextV2Message(socket);
+    socket.send(JSON.stringify(createRelayV2Envelope('HELLO', {
+      publicKeyJwk,
+      pairingCode: 'MINT-WAVE',
+      proposedNickname: 'mintwave',
+      extensionVersion: '0.3.0-test',
+      browser: { product: 'Chrome', version: '140.0.0.0', userAgent: null },
+      supportedProtocolVersions: [2],
+      capabilityManifestIds: ['octopus-extension-baseline-v1'],
+      maxEnvelopeBytes: MAX_RELAY_V2_ENVELOPE_BYTES
+    })));
+
+    const error = await errorMessage as RelayV2Envelope<'ERROR'>;
+    expect(error.type).toBe('ERROR');
+    expect(error.payload).toMatchObject({ code: 'ENDPOINT_NICKNAME_CONFLICT', retryable: true });
+  });
+
   it('forwards relay-v2 CDP events and disconnect only from the current generation', async () => {
-    const admin = store.createAgent('admin-events', ['broker:admin']);
-    const pairing = broker.createPairingCode(admin.principal, 'profile-events', 60_000);
     const keys = generateKeyPairSync('ec', { namedCurve: 'P-256' });
     const publicKeyJwk = keys.publicKey.export({ format: 'jwk' }) as RelayV2PayloadByType['HELLO']['publicKeyJwk'];
     const seen = { cdp: 0, detached: 0, disconnected: 0 };
@@ -331,8 +357,8 @@ describe('extension WebSocket gateway', () => {
     const pairedNext = nextV2Message(socket);
     socket.send(JSON.stringify(createRelayV2Envelope('HELLO', {
       publicKeyJwk,
-      pairingCode: pairing.pairingCode,
-      proposedNickname: 'events',
+      pairingCode: 'CALM-REEF',
+      proposedNickname: 'calmreef',
       extensionVersion: '0.2.0',
       browser: { product: 'Chrome', version: '140.0.0.0', userAgent: null },
       supportedProtocolVersions: [2],
@@ -344,7 +370,7 @@ describe('extension WebSocket gateway', () => {
     socket.send(JSON.stringify(createRelayV2Envelope('HELLO', {
       endpointId: paired.payload.endpointId,
       publicKeyJwk,
-      proposedNickname: 'events',
+      proposedNickname: 'calmreef',
       extensionVersion: '0.2.0',
       browser: { product: 'Chrome', version: '140.0.0.0', userAgent: null },
       supportedProtocolVersions: [2],
@@ -403,7 +429,7 @@ describe('extension WebSocket gateway', () => {
     await new Promise((resolve) => setTimeout(resolve, 5));
     expect(seen.disconnected).toBe(1);
     expect(store.canonical.logical.getCurrentConnection(
-      store.canonical.logical.getEndpointByNickname('profile-events')!.endpointRef
+      store.canonical.logical.getEndpointByNickname('calmreef')!.endpointRef
     )).toBeNull();
   });
 });

@@ -27,13 +27,15 @@ When an agent runs the installer, the agent follows the script's sequence and re
 
 Exact script names, commands, implementation language, packaging, and extension-to-broker transport details belong to later System, Component, and File definitions. The browser execution path is already fixed at the Product level: the installed extension relays managed-tab-confined CDP through Chrome's `chrome.debugger` API without a Chrome remote-debugging port or pipe.
 
-### Each participating browser profile's extension generates a unique endpoint nickname and pairs with the broker
+### Each participating browser profile's extension generates a readable code and pairs automatically
 
-After installation in a browser profile, that profile's distinct extension instance generates the nickname that identifies its browser endpoint to agents and runs its pairing process with the local broker. Pairing completes only when the generated nickname is unique among endpoints registered with that broker. Successful pairing registers that one extension instance and browser profile as one browser endpoint; a duplicate nickname leaves pairing incomplete.
+After installation in a browser profile, that profile's distinct extension instance randomly selects two short English words as its easy-to-read pairing code and combines them into the compact lowercase nickname that identifies its browser endpoint to agents. `MINT-WAVE` and `mintwave` illustrate the relationship; no numeric suffix is added. With the local broker running, the extension starts the pairing exchange automatically through its selected local transport. The human does not request a code from the broker, copy a code between applications, or enter a code in the extension.
+
+The options page shows the generated pairing code, proposed or final endpoint nickname, transport, and current connection result so the human can correlate the profile with the broker. The pairing code is a readable installation label rather than a password. Successful first connection registers that one extension instance and browser profile as one browser endpoint. If the proposed nickname belongs to another profile identity, the extension generates another two-word label and retries automatically until registration uses a unique nickname.
 
 Pairing registers browser capacity without assigning it to an agent. A Codex or Hermes automation session later binds designated or assigned workspaces to that endpoint through the ordinary session-time workspace request.
 
-The installation journey is not ready for browser automation until every intended profile's extension reports that it is paired with the broker and its generated endpoint nickname is available for discovery. This journey does not define nickname persistence across reconnect or reinstall, re-pair naming, or recovery after duplicate-nickname rejection.
+The installation journey is not ready for browser automation until every intended profile's extension reports that it is paired with the broker and its generated endpoint nickname is available for discovery. Ordinary reconnect uses the persisted profile identity without another pairing step. Reset or reinstall generates a new identity, readable code, and nickname candidate.
 
 ### The installer result tells the setup actor whether raw CDP automation can begin
 
@@ -47,7 +49,7 @@ The installer result states:
 - whether the intended endpoint can accept extension-relayed CDP traffic through `chrome.debugger`; and
 - which unmet prerequisite prevents automation when the environment is not ready.
 
-The installer result uses the extension's pairing result and generated nickname when reporting whether those prerequisites are complete.
+The installer result uses the extension's automatic-pairing result, generated code, and endpoint nickname when reporting whether those prerequisites are complete.
 
 The Codex-and-Hermes demonstration is ready when Octopus is available as an MCP tool in both sessions, each intended browser profile has its own extension instance, and every resulting endpoint is paired, uniquely named within the local broker, and able to relay permitted CDP traffic through `chrome.debugger`.
 
@@ -445,7 +447,7 @@ Evaluation records whether each asynchronous submission delivered its broker-iss
 | --- | --- |
 | Identify the agent user before describing setup or use cases. | The UX begins with Codex and Hermes, then explains installation, the default journey, and supporting journeys in that order. |
 | Let the installer dictate the installation journey. | A human or setup agent invokes the same scripted workflow instead of defining a separate installation sequence. |
-| Let each profile-local extension identify its endpoint during pairing. | Each participating browser profile has a distinct extension instance that generates a nickname unique within the same local broker; duplicate-nickname pairing does not complete. |
+| Let each profile-local extension identify and register its endpoint automatically. | Each participating browser profile has a distinct extension instance that generates two readable English words, combines them into a short lowercase nickname without digits, initiates local registration without a copied broker code, and regenerates automatically after a nickname collision. |
 | Make potentially long execution visible through broker-owned tickets. | Each of the ten asynchronous submissions durably accepts valid work and delivers `accepted` with a broker-issued `request_ref` before any effect becomes eligible; direct `get_browser_request` polling exposes progress and the terminal domain result. |
 | Keep acceptance, lifecycle state, and pause condition distinct. | `accepted` describes the submission response; the request moves through `queued`, `running`, and one of `succeeded`, `failed`, or `uncertain`, while a nullable pause condition can explain why queued or running work cannot advance. |
 | Count workspace capacity by distinct browser profiles and endpoints. | One profile or endpoint can satisfy the requested count only once; an admission-time capacity shortfall is rejected without a ticket or workspace, while a later creation failure keeps and reports already-created workspaces under `failed`. |
@@ -476,9 +478,9 @@ Evaluation records whether each asynchronous submission delivered its broker-iss
 | Product requirement | User Experience realization |
 | --- | --- |
 | MCP access serves AI-agent sessions. | Codex and Hermes agent sessions receive the same MCP experience against Chrome. |
-| Installation remains a supporting operation outside the target automation journey. | A human runs the scripted installer directly or asks a setup agent to run it for each intended profile, after which every distinct extension instance generates a unique endpoint nickname and pairs with the broker before automation begins. |
+| Installation remains a supporting operation outside the target automation journey. | A human runs the scripted installer directly or asks a setup agent to run it, after which every distinct extension instance generates its readable code and endpoint nickname and pairs automatically with the running local broker before automation begins. |
 | Agents discover paired browser endpoints by nickname and condition, including known endpoints that cannot currently accept a workspace. | Targeted paginated context shows known endpoints, eligible existing windows, and current managed-tab capability summaries, while workspace acquisition separately reports designated and assigned bindings. |
-| One paired extension instance and browser profile form one broker endpoint. | Successful pairing registers that profile-local extension endpoint without assigning it to an agent. |
+| One paired extension instance and browser profile form one broker endpoint. | Successful automatic first connection registers that profile-local extension endpoint without assigning it to an agent; later connections authenticate the persisted profile identity. |
 | Session-time workspace binding replaces permanent hard binding. | A later workspace request binds distinct registered endpoints, using each profile or endpoint at most once toward the requested count. |
 | Managed tabs inside tab-group workspaces are the browser-control units. | Each succeeded workspace request uses a selected or focus-defaulted eligible existing window and reports every ready logical workspace with at least one managed `tab_ref` and initial event cursor. |
 | Broker-issued tab identity keeps private browser target naming outside the agent's task context. | Every resolved workspace returns at least one workspace-scoped `tab_ref`; separately ticketed tab creation and automatic opener-child adoption provide additional broker-issued tab facts. |
